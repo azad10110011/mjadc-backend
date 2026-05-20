@@ -1,0 +1,11 @@
+/vendor/
+/.env
+/node_modules/
+/uploads/*
+!/uploads/notices/.gitkeep
+!/uploads/syllabus/.gitkeep
+!/uploads/routines/.gitkeep
+!/uploads/forms/.gitkeep
+!/uploads/gallery/.gitkeep
+!/uploads/profiles/.gitkeep
+!/uploads/documents/.gitkeep

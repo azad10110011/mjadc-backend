@@ -1,0 +1,23 @@
+RewriteEngine On
+
+# Pass Authorization header to PHP (needed for FastCGI)
+RewriteCond %{HTTP:Authorization} .
+RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+
+# Redirect all requests to index.php (front controller)
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^(.*)$ index.php [QSA,L]
+
+# Deny access to sensitive files
+<FilesMatch "\.(env|json|lock|md)$">
+    Deny from all
+</FilesMatch>
+
+# Deny directory listing
+Options -Indexes
+
+# Set upload max size
+php_value upload_max_filesize 10M
+php_value post_max_size 10M
+php_value max_execution_time 120

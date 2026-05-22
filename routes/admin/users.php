@@ -4,14 +4,25 @@
 $router->get('/api/admin/users', function () {
     Auth::requireRole('admin');
 
-    $users = Database::fetchAll(
-        "SELECT u.id, u.name, u.email, u.gender, u.date_of_birth, u.status, u.created_at,
-                GROUP_CONCAT(ur.role) as roles
-         FROM users u
-         LEFT JOIN user_roles ur ON u.id = ur.user_id
-         GROUP BY u.id
-         ORDER BY u.created_at DESC"
-    );
+    $rolesFilter = isset($_GET['roles']) ? explode(',', $_GET['roles']) : [];
+
+    $sql = "SELECT u.id, u.name, u.email, u.gender, u.date_of_birth, u.status, u.created_at,
+                   GROUP_CONCAT(ur.role) as roles
+            FROM users u
+            LEFT JOIN user_roles ur ON u.id = ur.user_id";
+
+    if (!empty($rolesFilter)) {
+        $placeholders = implode(',', array_fill(0, count($rolesFilter), '?'));
+        $sql .= " WHERE u.id IN (
+                    SELECT user_id FROM user_roles WHERE role IN ($placeholders)
+                 )";
+    }
+
+    $sql .= " GROUP BY u.id ORDER BY u.created_at DESC";
+
+    $users = !empty($rolesFilter)
+        ? Database::fetchAll($sql, $rolesFilter)
+        : Database::fetchAll($sql);
 
     foreach ($users as &$u) {
         $u['roles'] = $u['roles'] ? explode(',', $u['roles']) : [];

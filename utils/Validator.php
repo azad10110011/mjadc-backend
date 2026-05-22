@@ -31,7 +31,7 @@ class Validator
 
     public function minLength(string $field, int $min): self
     {
-        if (isset($this->data[$field]) && strlen($this->data[$field]) < $min) {
+        if (isset($this->data[$field]) && mb_strlen($this->data[$field]) < $min) {
             $this->errors[$field][] = "Must be at least {$min} characters";
         }
         return $this;
@@ -39,7 +39,7 @@ class Validator
 
     public function maxLength(string $field, int $max): self
     {
-        if (isset($this->data[$field]) && strlen($this->data[$field]) > $max) {
+        if (isset($this->data[$field]) && mb_strlen($this->data[$field]) > $max) {
             $this->errors[$field][] = "Must not exceed {$max} characters";
         }
         return $this;

@@ -7,6 +7,9 @@ if ($uri !== '/' && file_exists($staticFile) && !is_dir($staticFile)) {
     return false;
 }
 
+// Set UTF-8 as default encoding for multi-byte string functions
+mb_internal_encoding('UTF-8');
+
 // Load environment
 require_once __DIR__ . '/vendor/autoload.php';
 

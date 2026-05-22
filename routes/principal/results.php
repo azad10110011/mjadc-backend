@@ -17,7 +17,7 @@ $router->get('/api/principal/results/publish', function () {
              JOIN teachers t ON t.subject = er.subject
              WHERE er.status = 'approved' AND t.subject IN (
                  SELECT subject FROM teachers WHERE 
-                 (CASE WHEN ? = 'Science' THEN subject IN ('Physics','Chemistry','Botany','Higher Math')
+                 (CASE WHEN ? = 'Science' THEN subject IN ('Physics','Chemistry','Biology','Higher Math')
                   WHEN ? = 'Business Studies' THEN subject IN ('Management','Marketing','Accounting')
                   WHEN ? = 'Humanities' THEN subject IN ('Bangla','English','History','Economics')
                  END)

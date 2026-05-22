@@ -3,14 +3,14 @@
 // GET /api/admin/teachers-staff/teachers
 $router->get('/api/admin/teachers-staff/teachers', function () {
     Auth::requireRole('admin');
-    $teachers = Database::fetchAll("SELECT t.id, t.name, t.designation, t.subject, t.email, t.mobile, t.photo_path, t.joining_date, t.gender, u.date_of_birth FROM teachers t LEFT JOIN users u ON t.user_id = u.id ORDER BY t.name");
+    $teachers = Database::fetchAll("SELECT t.id, t.name, t.designation, t.subject, t.email, t.mobile, t.photo_path, t.joining_date, t.gender, u.date_of_birth, u.status as user_status, t.user_id FROM teachers t LEFT JOIN users u ON t.user_id = u.id ORDER BY t.name");
     Response::success($teachers);
 });
 
 // GET /api/admin/teachers-staff/staff
 $router->get('/api/admin/teachers-staff/staff', function () {
     Auth::requireRole('admin');
-    $staff = Database::fetchAll("SELECT s.id, s.name, s.designation, s.subject, s.email, s.mobile, s.photo_path, s.joining_date, s.gender, u.date_of_birth FROM staff s LEFT JOIN users u ON s.user_id = u.id ORDER BY s.name");
+    $staff = Database::fetchAll("SELECT s.id, s.name, s.designation, s.subject, s.email, s.mobile, s.photo_path, s.joining_date, s.gender, u.date_of_birth, u.status as user_status, s.user_id FROM staff s LEFT JOIN users u ON s.user_id = u.id ORDER BY s.name");
     Response::success($staff);
 });
 

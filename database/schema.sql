@@ -1,7 +1,16 @@
 -- MJADC College Management System - Database Schema
 -- MySQL 8.x
 
-
+-- =============================================
+-- MIGRATION: Convert existing database to utf8mb4
+-- Run these if you already have tables without Bangla support:
+-- =============================================
+-- ALTER DATABASE mjadc_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+-- 
+-- SELECT CONCAT('ALTER TABLE ', TABLE_NAME, ' CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;')
+-- FROM information_schema.TABLES
+-- WHERE TABLE_SCHEMA = 'mjadc_db' AND TABLE_TYPE = 'BASE TABLE';
+-- =============================================
 
 -- Users table
 CREATE TABLE users (
@@ -14,7 +23,7 @@ CREATE TABLE users (
     status ENUM('active', 'frozen') DEFAULT 'active',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-) ENGINE=InnoDB;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- User roles (many-to-many)
 CREATE TABLE user_roles (
@@ -23,7 +32,7 @@ CREATE TABLE user_roles (
     role ENUM('student', 'teacher', 'staff', 'exam_controller', 'administration', 'principal', 'admin') NOT NULL,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
     UNIQUE KEY unique_user_role (user_id, role)
-) ENGINE=InnoDB;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Students
 CREATE TABLE students (
@@ -44,7 +53,7 @@ CREATE TABLE students (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
-) ENGINE=InnoDB;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Teachers
 CREATE TABLE teachers (
@@ -61,7 +70,7 @@ CREATE TABLE teachers (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
-) ENGINE=InnoDB;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Staff
 CREATE TABLE staff (
@@ -78,7 +87,7 @@ CREATE TABLE staff (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
-) ENGINE=InnoDB;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Notices
 CREATE TABLE notices (
@@ -92,7 +101,7 @@ CREATE TABLE notices (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (created_by) REFERENCES users(id)
-) ENGINE=InnoDB;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Exams
 CREATE TABLE exams (
@@ -102,7 +111,7 @@ CREATE TABLE exams (
     exam_name VARCHAR(50) NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     UNIQUE KEY unique_exam (year, class, exam_name)
-) ENGINE=InnoDB;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Exam results
 CREATE TABLE exam_results (
@@ -126,7 +135,7 @@ CREATE TABLE exam_results (
     FOREIGN KEY (uploaded_by) REFERENCES users(id),
     FOREIGN KEY (approved_by) REFERENCES users(id),
     UNIQUE KEY unique_result (student_id, exam_id, subject)
-) ENGINE=InnoDB;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Tuition fees
 CREATE TABLE tuition_fees (
@@ -144,7 +153,7 @@ CREATE TABLE tuition_fees (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (student_id) REFERENCES students(id),
     UNIQUE KEY unique_fee (student_id, year, month)
-) ENGINE=InnoDB;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Leave allocations
 CREATE TABLE leave_allocations (
@@ -154,18 +163,16 @@ CREATE TABLE leave_allocations (
     total_days INT NOT NULL DEFAULT 0,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     UNIQUE KEY unique_allocation (role_type, leave_type)
-) ENGINE=InnoDB;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Leave taken tracker
-CREATE TABLE leave_taken (
+-- User roles (many-to-many)
+CREATE TABLE user_roles (
     id INT AUTO_INCREMENT PRIMARY KEY,
     user_id INT NOT NULL,
-    year YEAR NOT NULL,
-    leave_type ENUM('casual', 'medical', 'maternity', 'without_pay') NOT NULL,
-    days_taken INT DEFAULT 0,
+    role ENUM('student', 'teacher', 'staff', 'exam_controller', 'administration', 'principal', 'admin') NOT NULL,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-    UNIQUE KEY unique_leave_taken (user_id, year, leave_type)
-) ENGINE=InnoDB;
+    UNIQUE KEY unique_user_role (user_id, role)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Leave applications
 CREATE TABLE leave_applications (
@@ -183,7 +190,7 @@ CREATE TABLE leave_applications (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (applicant_id) REFERENCES users(id),
     FOREIGN KEY (reviewed_by) REFERENCES users(id)
-) ENGINE=InnoDB;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Admissions
 CREATE TABLE admissions (
@@ -211,7 +218,7 @@ CREATE TABLE admissions (
     transaction_id VARCHAR(100),
     status ENUM('pending', 'approved', 'rejected') DEFAULT 'pending',
     submitted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-) ENGINE=InnoDB;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Syllabus
 CREATE TABLE syllabus (
@@ -223,7 +230,7 @@ CREATE TABLE syllabus (
     uploaded_by INT,
     uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (uploaded_by) REFERENCES users(id)
-) ENGINE=InnoDB;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Routines
 CREATE TABLE routines (
@@ -234,7 +241,7 @@ CREATE TABLE routines (
     uploaded_by INT,
     uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (uploaded_by) REFERENCES users(id)
-) ENGINE=InnoDB;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Downloadable forms
 CREATE TABLE downloadable_forms (
@@ -244,7 +251,7 @@ CREATE TABLE downloadable_forms (
     uploaded_by INT,
     uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (uploaded_by) REFERENCES users(id)
-) ENGINE=InnoDB;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Gallery images
 CREATE TABLE gallery (
@@ -255,7 +262,7 @@ CREATE TABLE gallery (
     uploaded_by INT,
     uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (uploaded_by) REFERENCES users(id)
-) ENGINE=InnoDB;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Events calendar
 CREATE TABLE events (
@@ -266,7 +273,7 @@ CREATE TABLE events (
     created_by INT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (created_by) REFERENCES users(id)
-) ENGINE=InnoDB;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Governing body members
 CREATE TABLE governing_body (
@@ -276,7 +283,7 @@ CREATE TABLE governing_body (
     position VARCHAR(100) NOT NULL,
     photo_path VARCHAR(255),
     sort_order INT DEFAULT 0
-) ENGINE=InnoDB;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Co-curricular members
 CREATE TABLE co_curricular (
@@ -286,7 +293,7 @@ CREATE TABLE co_curricular (
     designation VARCHAR(100),
     mobile VARCHAR(15),
     photo_path VARCHAR(255)
-) ENGINE=InnoDB;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Annual reports
 CREATE TABLE annual_reports (
@@ -294,7 +301,7 @@ CREATE TABLE annual_reports (
     year YEAR NOT NULL,
     pdf_path VARCHAR(255) NOT NULL,
     uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-) ENGINE=InnoDB;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Migration: Add new columns for enhanced student management
 ALTER TABLE students
@@ -315,7 +322,7 @@ CREATE TABLE site_settings (
     updated_by INT,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (updated_by) REFERENCES users(id)
-) ENGINE=InnoDB;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Page content (static pages)
 CREATE TABLE page_content (
@@ -326,7 +333,7 @@ CREATE TABLE page_content (
     updated_by INT,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (updated_by) REFERENCES users(id)
-) ENGINE=InnoDB;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Payment transactions
 CREATE TABLE payments (
@@ -345,7 +352,7 @@ CREATE TABLE payments (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (student_id) REFERENCES students(id),
     FOREIGN KEY (admission_id) REFERENCES admissions(id)
-) ENGINE=InnoDB;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Notification log
 CREATE TABLE notifications (
@@ -358,7 +365,7 @@ CREATE TABLE notifications (
     sent_at TIMESTAMP NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id)
-) ENGINE=InnoDB;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Insert default settings
 INSERT INTO site_settings (setting_key, setting_value) VALUES

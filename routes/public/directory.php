@@ -49,7 +49,7 @@ $router->get('/api/co-curricular/{club}', function (array $params) {
 // GET /api/departments/{dept}/teachers
 $router->get('/api/departments/{dept}/teachers', function (array $params) {
     $deptMap = [
-        'science' => ['Physics', 'Chemistry', 'Botany', 'Higher Math'],
+        'science' => ['Physics', 'Chemistry', 'Biology', 'Higher Math'],
         'business-studies' => ['Management', 'Marketing', 'Production Management & Marketing', 'Accounting', 'Finance Banking & Insurance', 'Finance & Banking'],
         'humanities' => ['Bangla', 'English', 'Political Science', 'Economics', 'Geography', 'Philosophy', 'Sociology', 'Social Welfare', 'History', 'Islamic History', 'Islamic Studies', 'Psychology', 'Statistics', 'Agriculture', 'Home Economics'],
         'bmt' => ['Management', 'Marketing', 'Production Management & Marketing', 'Accounting'],

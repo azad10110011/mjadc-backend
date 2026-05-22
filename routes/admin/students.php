@@ -12,6 +12,12 @@ $router->get('/api/admin/students', function () {
     foreach ($students as &$s) {
         $s['compulsory_subjects'] = $s['compulsory_subjects'] ? json_decode($s['compulsory_subjects'], true) : [];
         $s['selective_subjects'] = $s['selective_subjects'] ? json_decode($s['selective_subjects'], true) : [];
+        if (is_string($s['selective_subjects'])) {
+            $s['selective_subjects'] = json_decode($s['selective_subjects'], true) ?? [];
+        }
+        if (is_string($s['compulsory_subjects'])) {
+            $s['compulsory_subjects'] = json_decode($s['compulsory_subjects'], true) ?? [];
+        }
     }
     Response::success($students);
 });
@@ -85,8 +91,8 @@ $router->post('/api/admin/students', function () {
         'present_address' => $data['present_address'] ?? null,
         'permanent_address' => $data['permanent_address'] ?? null,
         'student_group' => $data['student_group'] ?? null,
-        'compulsory_subjects' => isset($data['compulsory_subjects']) ? json_encode($data['compulsory_subjects']) : null,
-        'selective_subjects' => isset($data['selective_subjects']) ? json_encode($data['selective_subjects']) : null,
+        'compulsory_subjects' => isset($data['compulsory_subjects']) ? (is_array($data['compulsory_subjects']) ? json_encode($data['compulsory_subjects']) : $data['compulsory_subjects']) : null,
+        'selective_subjects' => isset($data['selective_subjects']) ? (is_array($data['selective_subjects']) ? json_encode($data['selective_subjects']) : $data['selective_subjects']) : null,
         'photo_path' => $data['photo_path'] ?? null,
     ]);
 

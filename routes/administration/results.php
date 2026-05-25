@@ -20,7 +20,7 @@ $router->get('/api/admin-panel/results', function () {
          JOIN students s ON er.student_id = s.id
          JOIN exams e ON er.exam_id = e.id
          {$whereClause}
-         ORDER BY e.year DESC, e.exam_name, s.student_id",
+         ORDER BY e.year, e.class, e.exam_name, s.student_id",
         $params
     );
 

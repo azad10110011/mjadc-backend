@@ -23,7 +23,7 @@ $router->get('/api/admin/results', function () {
          JOIN students s ON er.student_id = s.id
          JOIN exams e ON er.exam_id = e.id
          {$whereClause}
-         ORDER BY e.year DESC, e.exam_name, s.student_id",
+         ORDER BY e.year, e.class, e.exam_name, s.student_id",
         $params
     );
 
@@ -84,7 +84,7 @@ $router->get('/api/admin/results/upload-data', function () {
              AND er.exam_id = ? AND er.subject = ?
          WHERE s.class = ?
          ORDER BY s.student_id",
-        [$examId, $subject, $class]
+        $examId ? [$examId, $subject, $class] : [0, $subject, $class]
     );
 
     $partConfigs = getSubjectParts($subject);

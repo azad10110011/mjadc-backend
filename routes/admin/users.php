@@ -27,8 +27,12 @@ $router->get('/api/admin/users', function () {
     foreach ($users as &$u) {
         $u['roles'] = $u['roles'] ? explode(',', $u['roles']) : [];
 
-        $u['subjects'] = in_array('teacher', $u['roles'])
-            ? getTeacherSubjects((int)$u['id'])
+        $isTeacher = in_array('teacher', $u['roles']);
+        $u['subjects'] = $isTeacher
+            ? getTeacherSubjects((int)$u['id'], 'public')
+            : [];
+        $u['result_subjects'] = $isTeacher
+            ? getTeacherSubjects((int)$u['id'], 'result')
             : [];
     }
 
@@ -72,7 +76,10 @@ $router->post('/api/admin/users', function () {
     if (in_array('teacher', $data['roles'] ?? [])) {
         ensureTeacherRecord($userId, $data);
         if (!empty($data['subjects'])) {
-            setTeacherSubjects($userId, $data['subjects']);
+            setTeacherSubjects($userId, $data['subjects'], 'public');
+        }
+        if (!empty($data['result_subjects'])) {
+            setTeacherSubjects($userId, $data['result_subjects'], 'result');
         }
     }
 
@@ -111,7 +118,11 @@ $router->put('/api/admin/users/{id}', function (array $params) {
 
     if (isset($data['subjects']) && is_array($data['subjects'])) {
         ensureTeacherRecord((int)$params['id'], $data);
-        setTeacherSubjects((int)$params['id'], $data['subjects']);
+        setTeacherSubjects((int)$params['id'], $data['subjects'], 'public');
+    }
+    if (isset($data['result_subjects']) && is_array($data['result_subjects'])) {
+        ensureTeacherRecord((int)$params['id'], $data);
+        setTeacherSubjects((int)$params['id'], $data['result_subjects'], 'result');
     }
 
     Response::success(null, 'User updated');

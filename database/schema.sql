@@ -500,3 +500,39 @@ CREATE TABLE IF NOT EXISTS teacher_subjects (
 -- Migrate existing data
 INSERT IGNORE INTO teacher_subjects (teacher_id, subject)
 SELECT id, subject FROM teachers WHERE subject IS NOT NULL AND subject != '';
+
+-- Migration: Add type column to subjects (public/result/both)
+ALTER TABLE subjects
+  ADD COLUMN type ENUM('public','result','both') NOT NULL DEFAULT 'public' AFTER name;
+
+-- Mark existing subjects as public
+UPDATE subjects SET type = 'public';
+
+-- Migration: Add type column to teacher_subjects
+ALTER TABLE teacher_subjects
+  ADD COLUMN type ENUM('public','result') NOT NULL DEFAULT 'public' AFTER subject;
+
+-- Change unique constraint to include type
+ALTER TABLE teacher_subjects DROP INDEX unique_teacher_subject;
+ALTER TABLE teacher_subjects ADD UNIQUE KEY unique_teacher_subject_type (teacher_id, subject, type);
+
+-- Seed result management subjects (subjects with paper variants)
+INSERT IGNORE INTO subjects (name, type) VALUES
+('Bangla-1', 'result'), ('Bangla-2', 'result'),
+('English-1', 'result'), ('English-2', 'result'),
+('ICT-1', 'result'), ('ICT-2', 'result'),
+('Physics-1', 'result'), ('Physics-2', 'result'),
+('Chemistry-1', 'result'), ('Chemistry-2', 'result'),
+('Biology-1', 'result'), ('Biology-2', 'result'),
+('Higher Math-1', 'result'), ('Higher Math-2', 'result');
+
+-- Migration: Add parent_id to link result papers to parent subjects
+ALTER TABLE subjects
+  ADD COLUMN parent_id INT DEFAULT NULL AFTER type,
+  ADD FOREIGN KEY (parent_id) REFERENCES subjects(id) ON DELETE SET NULL;
+
+-- Link existing result subjects to their parent by naming convention
+UPDATE subjects s1
+  JOIN subjects s2 ON s2.name = SUBSTRING_INDEX(s1.name, '-', 1)
+  SET s1.parent_id = s2.id
+  WHERE s1.type = 'result' AND s2.type = 'public';

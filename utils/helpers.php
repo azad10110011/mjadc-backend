@@ -103,33 +103,60 @@ function logResultChange(int $examResultId, string $action, ?string $oldData, ?s
     ]);
 }
 
-function getTeacherSubjects(int $userId): array
+function getTeacherSubjects(int $userId, string $type = 'public'): array
 {
     $rows = Database::fetchAll(
         "SELECT ts.subject FROM teacher_subjects ts
          JOIN teachers t ON t.id = ts.teacher_id
-         WHERE t.user_id = ?",
-        [$userId]
+         WHERE t.user_id = ? AND ts.type = ?",
+        [$userId, $type]
     );
     return array_map(fn($r) => $r['subject'], $rows);
 }
 
-function setTeacherSubjects(int $userId, array $subjects): void
+function setTeacherSubjects(int $userId, array $subjects, string $type = 'public'): void
 {
     $teacher = Database::fetch("SELECT id FROM teachers WHERE user_id = ?", [$userId]);
     if (!$teacher) return;
     $teacherId = (int)$teacher['id'];
 
-    Database::query("DELETE FROM teacher_subjects WHERE teacher_id = ?", [$teacherId]);
+    Database::query("DELETE FROM teacher_subjects WHERE teacher_id = ? AND type = ?", [$teacherId, $type]);
     foreach ($subjects as $subject) {
         $subject = trim($subject);
         if ($subject !== '') {
             Database::insert('teacher_subjects', [
                 'teacher_id' => $teacherId,
                 'subject' => $subject,
+                'type' => $type,
             ]);
         }
     }
+}
+
+function getTeacherResultSubjects(int $userId): array
+{
+    return getTeacherSubjects($userId, 'result');
+}
+
+function setTeacherResultSubjects(int $userId, array $subjects): void
+{
+    setTeacherSubjects($userId, $subjects, 'result');
+}
+
+function getResultSubjects(): array
+{
+    $rows = Database::fetchAll(
+        "SELECT id, name, type FROM subjects WHERE type IN ('result','both') ORDER BY name"
+    );
+    return array_map(fn($r) => $r['name'], $rows);
+}
+
+function getPublicSubjects(): array
+{
+    $rows = Database::fetchAll(
+        "SELECT id, name, type FROM subjects WHERE type IN ('public','both') ORDER BY name"
+    );
+    return array_map(fn($r) => $r['name'], $rows);
 }
 
 function ensureTeacherRecord(int $userId, array $data = []): int
@@ -154,5 +181,10 @@ function canUserAccessSubject(array $user, string $subject): bool
     if (in_array('admin', $user['roles'])) return true;
     if (in_array('exam_controller', $user['roles'])) return true;
 
-    return in_array($subject, getTeacherSubjects((int)$user['id']));
+    $userId = (int)$user['id'];
+    $allSubjects = array_merge(
+        getTeacherSubjects($userId, 'public'),
+        getTeacherSubjects($userId, 'result')
+    );
+    return in_array($subject, $allSubjects);
 }

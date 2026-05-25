@@ -99,6 +99,7 @@ require __DIR__ . '/routes/admin/students.php';
 require __DIR__ . '/routes/admin/subject-parts.php';
 require __DIR__ . '/routes/admin/changelog.php';
 require __DIR__ . '/routes/admin/subjects.php';
+require __DIR__ . '/routes/admin/transcript.php';
 
 // Dispatch
 $router->dispatch();

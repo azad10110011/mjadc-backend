@@ -91,24 +91,15 @@ $router->delete('/api/admin/subject-parts/{id}', function (array $params) {
 $router->post('/api/admin/subject-parts/init-defaults', function () {
     Auth::requireRole('admin');
 
-    $subjects = Database::fetchAll("SELECT DISTINCT subject FROM subject_parts");
-    $configuredSubjects = array_column($subjects, 'subject');
+    $configuredRows = Database::fetchAll("SELECT DISTINCT subject FROM subject_parts");
+    $configuredSubjects = array_column($configuredRows, 'subject');
 
-    $allSubjects = [
-        'Bangla', 'English', 'ICT', 'Political Science',
-        'Economics', 'Geography', 'Philosophy', 'Sociology',
-        'Social Welfare', 'History', 'Islamic History',
-        'Islamic Studies', 'Psychology', 'Statistics',
-        'Agriculture', 'Home Economics', 'Physics', 'Chemistry',
-        'Biology', 'Higher Math', 'Management', 'Marketing',
-        'Production Management & Marketing', 'Accounting',
-        'Finance Banking & Insurance', 'Finance & Banking',
-    ];
-
+    $allSubjects = Database::fetchAll("SELECT name FROM subjects ORDER BY name");
     $defaults = getDefaultSubjectParts();
     $count = 0;
 
-    foreach ($allSubjects as $subject) {
+    foreach ($allSubjects as $row) {
+        $subject = $row['name'];
         if (in_array($subject, $configuredSubjects)) continue;
 
         foreach ($defaults as $part) {

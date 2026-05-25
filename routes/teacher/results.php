@@ -232,17 +232,42 @@ $router->get('/api/teacher/results/load-students', function () {
     );
     $examId = $exam ? $exam['id'] : null;
 
-    $students = Database::fetchAll(
-        "SELECT s.id, s.student_id, s.name,
-                er.mcq, er.cq, er.practical, er.parts_data, er.total, er.grade, er.gpa, er.status, er.absent_in,
-                er.id as result_id
-         FROM students s
-         LEFT JOIN exam_results er ON er.student_id = s.id
-             AND er.exam_id = ? AND er.subject = ?
-         WHERE s.class = ?
-         ORDER BY s.student_id",
-        $examId ? [$examId, $subject, $class] : [0, $subject, $class]
+    // Resolve parent subject for filtering (e.g., Bangla-1 → Bangla)
+    $parentSubject = $subject;
+    $parentRow = Database::fetch(
+        "SELECT p.name FROM subjects s JOIN subjects p ON s.parent_id = p.id WHERE s.name = ?",
+        [$subject]
     );
+    if ($parentRow) {
+        $parentSubject = $parentRow['name'];
+    }
+
+    $sql = "SELECT s.id, s.student_id, s.name,
+                   er.mcq, er.cq, er.practical, er.parts_data, er.total, er.grade, er.gpa, er.status, er.absent_in,
+                   er.id as result_id
+            FROM students s
+            LEFT JOIN exam_results er ON er.student_id = s.id
+                AND er.exam_id = ? AND er.subject = ?
+            WHERE s.class = ?";
+
+    $params = $examId ? [$examId, $subject, $class] : [0, $subject, $class];
+
+    // Teachers (not admin/exam_controller) only see students assigned to this subject
+    $isAdmin = in_array('admin', $user['roles']);
+    $isExamController = in_array('exam_controller', $user['roles']);
+    if (!$isAdmin && !$isExamController) {
+        $sql .= " AND (
+            JSON_CONTAINS(s.compulsory_subjects, ?)
+            OR JSON_CONTAINS(s.selective_subjects, ?)
+        )";
+        $parentJson = json_encode($parentSubject);
+        $params[] = $parentJson;
+        $params[] = $parentJson;
+    }
+
+    $sql .= " ORDER BY s.student_id";
+
+    $students = Database::fetchAll($sql, $params);
 
     $partConfigs = getSubjectParts($subject);
 

@@ -58,6 +58,7 @@ require __DIR__ . '/routes/student/fees.php';
 require __DIR__ . '/routes/teacher/results.php';
 require __DIR__ . '/routes/teacher/leave.php';
 require __DIR__ . '/routes/teacher/forms.php';
+require __DIR__ . '/routes/teacher/profile.php';
 
 // ============= STAFF ROUTES =============
 require __DIR__ . '/routes/staff/leave.php';

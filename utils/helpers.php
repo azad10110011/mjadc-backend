@@ -105,12 +105,21 @@ function logResultChange(int $examResultId, string $action, ?string $oldData, ?s
 
 function getTeacherSubjects(int $userId, string $type = 'public'): array
 {
-    $rows = Database::fetchAll(
-        "SELECT ts.subject FROM teacher_subjects ts
-         JOIN teachers t ON t.id = ts.teacher_id
-         WHERE t.user_id = ? AND ts.type = ?",
-        [$userId, $type]
-    );
+    if ($type === 'result') {
+        $rows = Database::fetchAll(
+            "SELECT ts.subject FROM teacher_subjects ts
+             JOIN teachers t ON t.id = ts.teacher_id
+             WHERE t.user_id = ? AND (ts.type = 'result' OR ts.type = 'public')",
+            [$userId]
+        );
+    } else {
+        $rows = Database::fetchAll(
+            "SELECT ts.subject FROM teacher_subjects ts
+             JOIN teachers t ON t.id = ts.teacher_id
+             WHERE t.user_id = ? AND ts.type = ?",
+            [$userId, $type]
+        );
+    }
     return array_map(fn($r) => $r['subject'], $rows);
 }
 

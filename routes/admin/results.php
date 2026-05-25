@@ -1,5 +1,7 @@
 <?php
 
+require_once __DIR__ . '/../../utils/helpers.php';
+
 // GET /api/admin/results?exam_name=&class=&year=
 $router->get('/api/admin/results', function () {
     Auth::requireRole('admin');
@@ -24,12 +26,32 @@ $router->get('/api/admin/results', function () {
          ORDER BY e.year DESC, e.exam_name, s.student_id",
         $params
     );
+
+    foreach ($results as &$r) {
+        $r['parts_data'] = $r['parts_data'] ? json_decode($r['parts_data'], true) : null;
+        $r['absent_in'] = $r['absent_in'] ? json_decode($r['absent_in'], true) : [];
+    }
+
     Response::success($results);
 });
 
 // DELETE /api/admin/results/{id}
 $router->delete('/api/admin/results/{id}', function (array $params) {
-    Auth::requireRole('admin');
+    $user = Auth::requireRole('admin');
+
+    $result = Database::fetch("SELECT * FROM exam_results WHERE id = ?", [$params['id']]);
+    if (!$result) {
+        Response::notFound('Result not found');
+    }
+
+    logResultChange(
+        (int)$params['id'],
+        'deleted',
+        json_encode($result),
+        null,
+        $user['id']
+    );
+
     Database::delete('exam_results', 'id = ?', [$params['id']]);
     Response::success(null, 'Result deleted');
 });
@@ -47,17 +69,15 @@ $router->get('/api/admin/results/upload-data', function () {
         Response::validationError(['year, class, exam_name, subject are required']);
     }
 
-    // Get or create exam
     $exam = Database::fetch(
         "SELECT id FROM exams WHERE year = ? AND class = ? AND exam_name = ?",
         [$year, $class, $examName]
     );
     $examId = $exam ? $exam['id'] : null;
 
-    // Get all students in the class with their existing marks for this exam+subject
     $students = Database::fetchAll(
         "SELECT s.id, s.student_id, s.name,
-                er.mcq, er.cq, er.practical, er.total, er.grade, er.gpa, er.status,
+                er.mcq, er.cq, er.practical, er.parts_data, er.total, er.grade, er.gpa, er.status, er.absent_in,
                 er.id as result_id
          FROM students s
          LEFT JOIN exam_results er ON er.student_id = s.id
@@ -67,7 +87,15 @@ $router->get('/api/admin/results/upload-data', function () {
         [$examId, $subject, $class]
     );
 
-    Response::success($students);
+    $partConfigs = getSubjectParts($subject);
+
+    foreach ($students as &$s) {
+        $s['absent_in'] = $s['absent_in'] ? json_decode($s['absent_in'], true) : [];
+        $s['parts_data'] = $s['parts_data'] ? json_decode($s['parts_data'], true) : null;
+        $s['part_configs'] = $partConfigs;
+    }
+
+    Response::success(['students' => $students, 'part_configs' => $partConfigs]);
 });
 
 // POST /api/admin/results/upload
@@ -87,7 +115,6 @@ $router->post('/api/admin/results/upload', function () {
         Response::validationError($validator->errors());
     }
 
-    // Get or create exam
     $exam = Database::fetch(
         "SELECT id FROM exams WHERE year = ? AND class = ? AND exam_name = ?",
         [$data['year'], $data['class'], $data['exam_name']]
@@ -103,6 +130,7 @@ $router->post('/api/admin/results/upload', function () {
         $examId = $exam['id'];
     }
 
+    $partConfigs = getSubjectParts($data['subject']);
     $marks = $data['marks'];
     $processed = 0;
 
@@ -113,36 +141,93 @@ $router->post('/api/admin/results/upload', function () {
         );
         if (!$student) continue;
 
-        $total = ($mark['mcq'] ?? 0) + ($mark['cq'] ?? 0) + ($mark['practical'] ?? 0);
-        $grade = calculateGradeFromTotal($total);
+        $absentIn = $mark['absent_in'] ?? [];
+        $partsData = $mark['parts_data'] ?? [];
+        $mcq = in_array('mcq', $absentIn) ? 0 : (isset($partsData['mcq']) ? (float)$partsData['mcq'] : ($mark['mcq'] ?? 0));
+        $cq = in_array('cq', $absentIn) ? 0 : (isset($partsData['cq']) ? (float)$partsData['cq'] : ($mark['cq'] ?? 0));
+        $practical = in_array('practical', $absentIn) ? 0 : (isset($partsData['practical']) ? (float)$partsData['practical'] : ($mark['practical'] ?? 0));
 
-        // Upsert
+        if (!empty($partsData)) {
+            // Clamp each part to its full_mark
+            foreach ($partConfigs as $config) {
+                $pn = $config['part_name'];
+                if (!in_array($pn, $absentIn) && isset($partsData[$pn])) {
+                    $partsData[$pn] = min((float)$partsData[$pn], (float)$config['full_mark']);
+                }
+            }
+            $grade = calculateGradeFromParts($partsData, $partConfigs, $absentIn);
+            $partsJson = json_encode($partsData);
+            $total = array_sum(array_values($partsData));
+        } else {
+            $total = $mcq + $cq + $practical;
+            $grade = calculateGradeFromTotal($total);
+            $partsJson = null;
+        }
+
+        $absentJson = !empty($absentIn) ? json_encode($absentIn) : null;
+
         $existing = Database::fetch(
             "SELECT id FROM exam_results WHERE student_id = ? AND exam_id = ? AND subject = ?",
             [$student['id'], $examId, $data['subject']]
         );
 
         if ($existing) {
+            $oldResult = Database::fetch("SELECT * FROM exam_results WHERE id = ?", [$existing['id']]);
+
             Database::update('exam_results', [
-                'mcq' => $mark['mcq'] ?? 0,
-                'cq' => $mark['cq'] ?? 0,
-                'practical' => $mark['practical'] ?? 0,
+                'mcq' => $mcq,
+                'cq' => $cq,
+                'practical' => $practical,
+                'parts_data' => $partsJson,
+                'total' => $total,
                 'grade' => $grade['grade'],
                 'gpa' => $grade['points'],
+                'absent_in' => $absentJson,
+                'status' => 'draft',
+                'uploaded_by' => $user['id'],
             ], 'id = ?', ['id' => $existing['id']]);
+
+            logResultChange(
+                (int)$existing['id'],
+                'updated',
+                json_encode($oldResult),
+                json_encode([
+                    'mcq' => $mcq, 'cq' => $cq, 'practical' => $practical,
+                    'parts_data' => $partsData, 'total' => $total,
+                    'grade' => $grade['grade'], 'gpa' => $grade['points'],
+                    'absent_in' => $absentIn,
+                ]),
+                $user['id']
+            );
         } else {
-            Database::insert('exam_results', [
+            $newId = Database::insert('exam_results', [
                 'student_id' => $student['id'],
                 'exam_id' => $examId,
                 'subject' => $data['subject'],
-                'mcq' => $mark['mcq'] ?? 0,
-                'cq' => $mark['cq'] ?? 0,
-                'practical' => $mark['practical'] ?? 0,
+                'mcq' => $mcq,
+                'cq' => $cq,
+                'practical' => $practical,
+                'parts_data' => $partsJson,
+                'total' => $total,
                 'grade' => $grade['grade'],
                 'gpa' => $grade['points'],
+                'absent_in' => $absentJson,
                 'status' => 'draft',
                 'uploaded_by' => $user['id'],
             ]);
+
+            logResultChange(
+                (int)$newId,
+                'created',
+                null,
+                json_encode([
+                    'student_id' => $student['id'],
+                    'subject' => $data['subject'],
+                    'parts_data' => $partsData, 'total' => $total,
+                    'grade' => $grade['grade'], 'gpa' => $grade['points'],
+                ]),
+                $user['id']
+            );
         }
         $processed++;
     }

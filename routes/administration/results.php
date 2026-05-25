@@ -23,5 +23,11 @@ $router->get('/api/admin-panel/results', function () {
          ORDER BY e.year DESC, e.exam_name, s.student_id",
         $params
     );
+
+    foreach ($results as &$r) {
+        $r['parts_data'] = $r['parts_data'] ? json_decode($r['parts_data'], true) : null;
+        $r['absent_in'] = $r['absent_in'] ? json_decode($r['absent_in'], true) : [];
+    }
+
     Response::success($results);
 });

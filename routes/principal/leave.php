@@ -139,3 +139,35 @@ $router->post('/api/principal/leave/apply', function () {
 
     Response::created(['id' => $applicationId], 'Leave application submitted');
 });
+
+// PUT /api/principal/leave/{id}
+$router->put('/api/principal/leave/{id}', function (array $params) {
+    $user = Auth::requireRole('principal');
+
+    $application = Database::fetch(
+        "SELECT * FROM leave_applications WHERE id = ? AND applicant_id = ? AND status = 'pending'",
+        [$params['id'], $user['id']]
+    );
+
+    if (!$application) {
+        Response::forbidden('You can only edit your own pending applications');
+    }
+
+    $data = json_decode(file_get_contents('php://input'), true);
+    $allowedFields = ['leave_type', 'from_date', 'to_date', 'reason'];
+    $updateData = [];
+
+    foreach ($allowedFields as $field) {
+        if (isset($data[$field])) {
+            $updateData[$field] = $data[$field];
+        }
+    }
+
+    if (empty($updateData)) {
+        Response::validationError(['No valid fields to update']);
+    }
+
+    Database::update('leave_applications', $updateData, 'id = ?', ['id' => $params['id']]);
+
+    Response::success(null, 'Leave application updated');
+});

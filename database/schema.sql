@@ -137,6 +137,55 @@ CREATE TABLE exam_results (
     UNIQUE KEY unique_result (student_id, exam_id, subject)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+ALTER TABLE exam_results
+  MODIFY COLUMN grade VARCHAR(10) DEFAULT NULL,
+  ADD COLUMN absent_in TEXT DEFAULT NULL AFTER grade;
+
+-- Subject parts configuration (dynamic mark distribution per subject)
+CREATE TABLE subject_parts (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    subject VARCHAR(50) NOT NULL,
+    part_name VARCHAR(50) NOT NULL,
+    full_mark DECIMAL(5,2) NOT NULL DEFAULT 0,
+    pass_mark DECIMAL(5,2) NOT NULL DEFAULT 0,
+    sort_order INT NOT NULL DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY unique_subject_part (subject, part_name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Result change log for tracking user actions
+CREATE TABLE result_changelog (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    exam_result_id INT DEFAULT NULL,
+    action VARCHAR(50) NOT NULL,
+    old_data TEXT DEFAULT NULL,
+    new_data TEXT DEFAULT NULL,
+    user_id INT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (exam_result_id) REFERENCES exam_results(id) ON DELETE SET NULL,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Migration: Add parts_data JSON column for dynamic subject parts
+ALTER TABLE exam_results
+  ADD COLUMN parts_data TEXT DEFAULT NULL AFTER practical,
+  ADD COLUMN total_new DECIMAL(6,2) DEFAULT 0 AFTER grade;
+
+UPDATE exam_results SET total_new = total;
+
+ALTER TABLE exam_results
+  DROP COLUMN total;
+
+ALTER TABLE exam_results
+  CHANGE COLUMN total_new total DECIMAL(6,2) DEFAULT 0 AFTER grade;
+
+-- Populate parts_data from existing columns for backward compatibility
+UPDATE exam_results SET parts_data = JSON_OBJECT(
+  'mcq', COALESCE(mcq, 0),
+  'cq', COALESCE(cq, 0),
+  'practical', COALESCE(practical, 0)
+) WHERE parts_data IS NULL;
+
 -- Tuition fees
 CREATE TABLE tuition_fees (
     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -421,3 +470,33 @@ INSERT INTO users (name, email, password_hash, gender) VALUES
 ('System Admin', 'admin@mjadc.ac.bd', '$2y$12$gpB2J1GPrvl7Pceog7tHme8LUIm9x0ElaqrII4soTw2W00.lE76ue', 'male');
 
 INSERT INTO user_roles (user_id, role) VALUES (1, 'admin');
+
+-- Subjects catalog (manageable by admin)
+CREATE TABLE IF NOT EXISTS subjects (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(50) NOT NULL UNIQUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+INSERT IGNORE INTO subjects (name) VALUES
+('Bangla'), ('English'), ('ICT'), ('Political Science'),
+('Economics'), ('Geography'), ('Philosophy'), ('Sociology'),
+('Social Welfare'), ('History'), ('Islamic History'),
+('Islamic Studies'), ('Psychology'), ('Statistics'),
+('Agriculture'), ('Home Economics'), ('Physics'), ('Chemistry'),
+('Biology'), ('Higher Math'), ('Management'), ('Marketing'),
+('Production Management & Marketing'), ('Accounting'),
+('Finance Banking & Insurance'), ('Finance & Banking');
+
+-- Teacher subjects (multiple subjects per teacher)
+CREATE TABLE IF NOT EXISTS teacher_subjects (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    teacher_id INT NOT NULL,
+    subject VARCHAR(50) NOT NULL,
+    FOREIGN KEY (teacher_id) REFERENCES teachers(id) ON DELETE CASCADE,
+    UNIQUE KEY unique_teacher_subject (teacher_id, subject)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Migrate existing data
+INSERT IGNORE INTO teacher_subjects (teacher_id, subject)
+SELECT id, subject FROM teachers WHERE subject IS NOT NULL AND subject != '';

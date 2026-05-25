@@ -22,6 +22,7 @@ require_once __DIR__ . '/utils/Response.php';
 require_once __DIR__ . '/utils/Router.php';
 require_once __DIR__ . '/utils/Validator.php';
 require_once __DIR__ . '/utils/JWTHandler.php';
+require_once __DIR__ . '/utils/helpers.php';
 require_once __DIR__ . '/middleware/Cors.php';
 require_once __DIR__ . '/middleware/Auth.php';
 
@@ -47,6 +48,7 @@ require __DIR__ . '/routes/public/admissions.php';
 require __DIR__ . '/routes/public/payments.php';
 require __DIR__ . '/routes/public/settings.php';
 require __DIR__ . '/routes/public/directory.php';
+require __DIR__ . '/routes/public/subjects.php';
 
 // ============= STUDENT ROUTES =============
 require __DIR__ . '/routes/student/dashboard.php';
@@ -94,6 +96,9 @@ require __DIR__ . '/routes/admin/transactions.php';
 require __DIR__ . '/routes/admin/leave.php';
 require __DIR__ . '/routes/admin/settings.php';
 require __DIR__ . '/routes/admin/students.php';
+require __DIR__ . '/routes/admin/subject-parts.php';
+require __DIR__ . '/routes/admin/changelog.php';
+require __DIR__ . '/routes/admin/subjects.php';
 
 // Dispatch
 $router->dispatch();

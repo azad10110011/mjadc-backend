@@ -204,10 +204,27 @@ $router->put('/api/admin/students/{id}', function (array $params) {
 // DELETE /api/admin/students/{id}
 $router->delete('/api/admin/students/{id}', function (array $params) {
     Auth::requireRole('admin');
-    $student = Database::fetch("SELECT user_id FROM students WHERE id = ?", [$params['id']]);
-    if ($student && $student['user_id']) {
-        Database::delete('users', 'id = ?', [$student['user_id']]);
+    $pdo = Database::getInstance();
+    try {
+        $pdo->beginTransaction();
+        $student = Database::fetch("SELECT user_id FROM students WHERE id = ?", [$params['id']]);
+        if (!$student) {
+            Response::notFound('Student not found');
+        }
+        Database::query("DELETE FROM result_changelog WHERE exam_result_id IN (SELECT id FROM exam_results WHERE student_id = ?)", [$params['id']]);
+        Database::query("DELETE FROM exam_results WHERE student_id = ?", [$params['id']]);
+        Database::query("DELETE FROM tuition_fees WHERE student_id = ?", [$params['id']]);
+        Database::delete('students', 'id = ?', [$params['id']]);
+        if ($student['user_id']) {
+            Database::query("DELETE FROM user_roles WHERE user_id = ?", [$student['user_id']]);
+            Database::query("DELETE FROM users WHERE id = ?", [$student['user_id']]);
+        }
+        $pdo->commit();
+        Response::success(null, 'Student deleted');
+    } catch (\Exception $e) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        Response::error('Failed to delete student: ' . $e->getMessage(), 500);
     }
-    Database::delete('students', 'id = ?', [$params['id']]);
-    Response::success(null, 'Student deleted');
 });

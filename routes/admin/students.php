@@ -93,6 +93,7 @@ $router->post('/api/admin/students', function () {
         'student_group' => $data['student_group'] ?? null,
         'compulsory_subjects' => isset($data['compulsory_subjects']) ? (is_array($data['compulsory_subjects']) ? json_encode($data['compulsory_subjects']) : $data['compulsory_subjects']) : null,
         'selective_subjects' => isset($data['selective_subjects']) ? (is_array($data['selective_subjects']) ? json_encode($data['selective_subjects']) : $data['selective_subjects']) : null,
+        'optional_subject' => $data['optional_subject'] ?? null,
         'photo_path' => $data['photo_path'] ?? null,
     ]);
 
@@ -134,6 +135,9 @@ $router->post('/api/admin/students/{id}', function (array $params) {
     }
     if (isset($data['selective_subjects'])) {
         $updateData['selective_subjects'] = is_array($data['selective_subjects']) ? json_encode($data['selective_subjects']) : $data['selective_subjects'];
+    }
+    if (isset($data['optional_subject'])) {
+        $updateData['optional_subject'] = $data['optional_subject'];
     }
     if (isset($data['present_address'])) {
         $updateData['present_address'] = $data['present_address'];
@@ -185,6 +189,9 @@ $router->put('/api/admin/students/{id}', function (array $params) {
     }
     if (isset($data['selective_subjects'])) {
         $updateData['selective_subjects'] = is_array($data['selective_subjects']) ? json_encode($data['selective_subjects']) : $data['selective_subjects'];
+    }
+    if (isset($data['optional_subject'])) {
+        $updateData['optional_subject'] = $data['optional_subject'];
     }
     if (isset($data['present_address'])) {
         $updateData['present_address'] = $data['present_address'];

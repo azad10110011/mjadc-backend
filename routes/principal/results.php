@@ -51,7 +51,7 @@ $router->post('/api/principal/results/publish', function () {
     $updated = Database::query(
         "UPDATE exam_results er 
          JOIN exams e ON er.exam_id = e.id 
-         SET er.status = 'published' 
+         SET er.status = 'published', er.published_at = NOW()
          WHERE e.exam_name = ? AND er.status = 'approved'",
         [$examName]
     );

@@ -37,7 +37,9 @@ $router->post('/api/admin/transcript', function () {
     }
 
     $students = Database::fetchAll(
-        "SELECT s.id, s.student_id, s.name, s.class, s.student_group,
+        "SELECT s.id, s.student_id, s.name, s.father_name, s.mother_name,
+                s.date_of_birth, s.registration_no, s.class, s.student_group,
+                s.academic_session, s.student_type, s.optional_subject,
                 s.compulsory_subjects, s.selective_subjects
          FROM students s
          WHERE $where
@@ -53,7 +55,10 @@ $router->post('/api/admin/transcript', function () {
     $placeholders = implode(',', array_fill(0, count($studentIds), '?'));
 
     $results = Database::fetchAll(
-        "SELECT er.*, s.student_id as s_roll, s.name as s_name, s.student_group,
+        "SELECT er.*, s.student_id as s_roll, s.name as s_name, s.father_name,
+                s.mother_name, s.date_of_birth, s.registration_no,
+                s.student_group, s.academic_session, s.student_type,
+                s.optional_subject,
                 e.exam_name, e.year, e.class
          FROM exam_results er
          JOIN students s ON er.student_id = s.id
@@ -70,6 +75,13 @@ $router->post('/api/admin/transcript', function () {
         $studentMap[$s['id']] = $s;
     }
 
+    $publishedAt = null;
+    foreach ($results as $r) {
+        if (!$publishedAt && !empty($r['published_at'])) {
+            $publishedAt = $r['published_at'];
+        }
+    }
+
     foreach ($results as $r) {
         $sid = (int)$r['student_id'];
         if (!isset($transcripts[$sid])) {
@@ -77,21 +89,24 @@ $router->post('/api/admin/transcript', function () {
             $transcripts[$sid] = [
                 'student_id' => $r['s_roll'],
                 'name' => $r['s_name'],
+                'father_name' => $r['father_name'] ?? '',
+                'mother_name' => $r['mother_name'] ?? '',
+                'date_of_birth' => $r['date_of_birth'] ?? '',
+                'registration_no' => $r['registration_no'] ?? '',
                 'class' => $r['class'],
                 'group' => $r['student_group'],
                 'exam_name' => $r['exam_name'],
                 'year' => $r['year'],
+                'academic_session' => $r['academic_session'] ?? '',
+                'student_type' => $r['student_type'] ?? '',
+                'optional_subject' => $r['optional_subject'] ?? '',
+                'published_at' => $publishedAt,
                 'subjects' => [],
             ];
         }
 
-        $partsData = $r['parts_data'] ? json_decode($r['parts_data'], true) : [];
-        $absentIn = $r['absent_in'] ? json_decode($r['absent_in'], true) : [];
-
         $transcripts[$sid]['subjects'][] = [
             'subject' => $r['subject'],
-            'parts_data' => $partsData,
-            'absent_in' => $absentIn,
             'total' => (float)$r['total'],
             'grade' => $r['grade'],
             'gpa' => (float)$r['gpa'],
@@ -99,27 +114,65 @@ $router->post('/api/admin/transcript', function () {
         ];
     }
 
-    // Calculate overall GPA for each student
+    // Calculate GPA with optional subject logic
     foreach ($transcripts as &$t) {
-        $totalPoints = 0;
-        $subjectCount = 0;
-        $hasFail = false;
+        $optionalSubj = $t['optional_subject'];
+        $mainSubjects = [];
+        $optionalSubjectData = null;
+
         foreach ($t['subjects'] as $sub) {
+            if ($optionalSubj && strcasecmp($sub['subject'], $optionalSubj) === 0) {
+                $optionalSubjectData = $sub;
+            } else {
+                $mainSubjects[] = $sub;
+            }
+        }
+
+        // If optional subject not found in results, treat all as main
+        if (!$optionalSubjectData) {
+            $mainSubjects = $t['subjects'];
+        }
+
+        $totalMainPoints = 0;
+        $mainCount = 0;
+        $hasFail = false;
+
+        foreach ($mainSubjects as $sub) {
             if ($sub['grade'] !== 'Absent' && $sub['grade'] !== 'F') {
-                $totalPoints += $sub['gpa'];
-                $subjectCount++;
+                $totalMainPoints += $sub['gpa'];
+                $mainCount++;
             } else {
                 $hasFail = true;
             }
         }
-        $t['total_subjects'] = count($t['subjects']);
+
+        $t['total_subjects'] = count($mainSubjects);
+
+        // GPA without optional (capped at 5.00)
         if ($hasFail) {
+            $t['gpa_without_optional'] = 0;
             $t['overall_grade'] = 'F';
-            $t['overall_gpa'] = $subjectCount > 0 ? round($totalPoints / $subjectCount, 2) : 0;
-        } elseif ($subjectCount > 0) {
-            $gpa = round($totalPoints / $subjectCount, 2);
+        } elseif ($mainCount > 0) {
+            $t['gpa_without_optional'] = min(round($totalMainPoints / $mainCount, 2), 5.00);
+        } else {
+            $t['gpa_without_optional'] = 0;
+        }
+
+        // Optional subject GP Above 2
+        $gpAbove2 = 0;
+        if ($optionalSubjectData && $optionalSubjectData['grade'] !== 'Absent' && $optionalSubjectData['grade'] !== 'F') {
+            $gpAbove2 = max(0, $optionalSubjectData['gpa'] - 2.00);
+        }
+        $t['optional_gp_above_2'] = round($gpAbove2, 2);
+
+        // Final GPA with optional (capped at 5.00)
+        $totalAllPoints = $totalMainPoints + $gpAbove2;
+        if ($hasFail) {
+            $t['overall_gpa'] = 0;
+            $t['overall_grade'] = 'F';
+        } elseif ($mainCount > 0) {
+            $gpa = min(round($totalAllPoints / $mainCount, 2), 5.00);
             $t['overall_gpa'] = $gpa;
-            // Map GPA to letter grade
             if ($gpa >= 5) $t['overall_grade'] = 'A+';
             elseif ($gpa >= 4) $t['overall_grade'] = 'A';
             elseif ($gpa >= 3.5) $t['overall_grade'] = 'A-';
@@ -128,9 +181,10 @@ $router->post('/api/admin/transcript', function () {
             elseif ($gpa >= 1) $t['overall_grade'] = 'D';
             else $t['overall_grade'] = 'F';
         } else {
-            $t['overall_grade'] = 'N/A';
             $t['overall_gpa'] = 0;
+            $t['overall_grade'] = 'N/A';
         }
+
         unset($t);
     }
 

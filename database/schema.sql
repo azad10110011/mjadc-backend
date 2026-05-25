@@ -153,6 +153,17 @@ CREATE TABLE subject_parts (
     UNIQUE KEY unique_subject_part (subject, part_name)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- Add registration_no, academic_session, student_type for transcripts
+ALTER TABLE students
+  ADD COLUMN registration_no VARCHAR(20) DEFAULT NULL AFTER student_id,
+  ADD COLUMN academic_session VARCHAR(20) DEFAULT NULL AFTER joining_year,
+  ADD COLUMN student_type ENUM('Regular', 'Irregular', 'Improvement') DEFAULT 'Regular' AFTER academic_session,
+  ADD COLUMN optional_subject VARCHAR(50) DEFAULT NULL AFTER student_type;
+
+-- Add published_at to exam_results for transcript publish date
+ALTER TABLE exam_results
+  ADD COLUMN published_at TIMESTAMP NULL DEFAULT NULL AFTER status;
+
 -- Result change log for tracking user actions
 CREATE TABLE result_changelog (
     id INT AUTO_INCREMENT PRIMARY KEY,

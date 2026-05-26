@@ -40,13 +40,24 @@ $router->put('/api/admin/pages/{key}', function (array $params) {
         Response::validationError(['content is required']);
     }
 
-    Database::update('page_content', [
-        'content' => $data['content'],
-        'title' => $data['title'] ?? null,
-        'updated_by' => $user['id'],
-    ], 'page_key = ?', ['page_key' => $params['key']]);
+    $existing = Database::fetch("SELECT id FROM page_content WHERE page_key = ?", [$params['key']]);
 
-    Response::success(null, 'Page updated');
+    if ($existing) {
+        Database::update('page_content', [
+            'content' => $data['content'],
+            'title' => $data['title'] ?? null,
+            'updated_by' => $user['id'],
+        ], 'page_key = ?', ['page_key' => $params['key']]);
+        Response::success(null, 'Page updated');
+    } else {
+        Database::insert('page_content', [
+            'page_key' => $params['key'],
+            'title' => $data['title'] ?? null,
+            'content' => $data['content'],
+            'updated_by' => $user['id'],
+        ]);
+        Response::created(null, 'Page created');
+    }
 });
 
 // DELETE /api/admin/pages/{key}

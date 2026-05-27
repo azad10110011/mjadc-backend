@@ -101,6 +101,12 @@ require __DIR__ . '/routes/admin/subject-parts.php';
 require __DIR__ . '/routes/admin/changelog.php';
 require __DIR__ . '/routes/admin/subjects.php';
 require __DIR__ . '/routes/admin/transcript.php';
+require __DIR__ . '/routes/admin/governing-body.php';
+require __DIR__ . '/routes/admin/principals.php';
+require __DIR__ . '/routes/admin/teachers-council.php';
+require __DIR__ . '/routes/admin/career-club.php';
+require __DIR__ . '/routes/admin/co-curricular.php';
+require __DIR__ . '/routes/admin/academic-approvals.php';
 
 // Dispatch
 $router->dispatch();

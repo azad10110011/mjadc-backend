@@ -3,8 +3,17 @@
 // GET /api/governing-body
 $router->get('/api/governing-body', function () {
     $members = Database::fetchAll(
-        "SELECT id, name, designation, position, photo_path 
+        "SELECT id, name, designation, mobile, photo_path 
          FROM governing_body ORDER BY sort_order"
+    );
+    Response::success($members);
+});
+
+// GET /api/principals
+$router->get('/api/principals', function () {
+    $members = Database::fetchAll(
+        "SELECT id, name, designation, photo_path, message 
+         FROM principals ORDER BY sort_order"
     );
     Response::success($members);
 });
@@ -13,9 +22,27 @@ $router->get('/api/governing-body', function () {
 $router->get('/api/teachers-council', function () {
     $members = Database::fetchAll(
         "SELECT id, name, designation, COALESCE(position, '') as position, photo_path 
-         FROM teachers ORDER BY name"
+         FROM teachers_council ORDER BY sort_order"
     );
     Response::success($members);
+});
+
+// GET /api/career-club
+$router->get('/api/career-club', function () {
+    $members = Database::fetchAll(
+        "SELECT id, name, designation, COALESCE(position, '') as position, photo_path 
+         FROM career_club ORDER BY sort_order"
+    );
+    Response::success($members);
+});
+
+// GET /api/academic-approvals
+$router->get('/api/academic-approvals', function () {
+    $items = Database::fetchAll(
+        "SELECT id, heading, image_path, image_width, image_height 
+         FROM academic_approvals ORDER BY sort_order"
+    );
+    Response::success($items);
 });
 
 // GET /api/teachers-list

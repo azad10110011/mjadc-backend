@@ -340,9 +340,50 @@ CREATE TABLE governing_body (
     id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
     designation VARCHAR(100) NOT NULL,
-    position VARCHAR(100) NOT NULL,
+    photo_path VARCHAR(255),
+    mobile VARCHAR(15),
+    sort_order INT DEFAULT 0
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Principals & Vice-Principals
+CREATE TABLE principals (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    designation VARCHAR(100) NOT NULL,
+    photo_path VARCHAR(255),
+    message TEXT,
+    sort_order INT DEFAULT 0
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Teachers Council
+CREATE TABLE teachers_council (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    designation VARCHAR(100) NOT NULL,
+    position VARCHAR(100),
     photo_path VARCHAR(255),
     sort_order INT DEFAULT 0
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Career Club
+CREATE TABLE career_club (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    designation VARCHAR(100) NOT NULL,
+    position VARCHAR(100),
+    photo_path VARCHAR(255),
+    sort_order INT DEFAULT 0
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Academic Approvals
+CREATE TABLE academic_approvals (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    heading VARCHAR(255) NOT NULL,
+    image_path VARCHAR(255),
+    image_width INT,
+    image_height INT,
+    sort_order INT DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Co-curricular members

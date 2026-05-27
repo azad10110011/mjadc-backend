@@ -47,6 +47,8 @@ require __DIR__ . '/routes/public/pages.php';
 require __DIR__ . '/routes/public/admissions.php';
 require __DIR__ . '/routes/public/payments.php';
 require __DIR__ . '/routes/public/settings.php';
+require __DIR__ . '/routes/public/contact.php';
+require __DIR__ . '/routes/public/student-info.php';
 require __DIR__ . '/routes/public/directory.php';
 require __DIR__ . '/routes/public/subjects.php';
 
@@ -96,6 +98,8 @@ require __DIR__ . '/routes/admin/fees.php';
 require __DIR__ . '/routes/admin/transactions.php';
 require __DIR__ . '/routes/admin/leave.php';
 require __DIR__ . '/routes/admin/settings.php';
+require __DIR__ . '/routes/admin/contact.php';
+require __DIR__ . '/routes/admin/student-info.php';
 require __DIR__ . '/routes/admin/students.php';
 require __DIR__ . '/routes/admin/subject-parts.php';
 require __DIR__ . '/routes/admin/changelog.php';

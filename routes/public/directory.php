@@ -3,7 +3,7 @@
 // GET /api/governing-body
 $router->get('/api/governing-body', function () {
     $members = Database::fetchAll(
-        "SELECT id, name, designation, position, photo_path 
+        "SELECT id, name, designation, COALESCE(position, '') as position, mobile, photo_path 
          FROM governing_body ORDER BY sort_order"
     );
     Response::success($members);
@@ -21,7 +21,7 @@ $router->get('/api/teachers-council', function () {
 // GET /api/teachers-list
 $router->get('/api/teachers-list', function () {
     $teachers = Database::fetchAll(
-        "SELECT id, name, designation, subject, email, mobile, photo_path 
+        "SELECT id, name, name_bangla, designation, subject, email, mobile, photo_path 
          FROM teachers ORDER BY name"
     );
     Response::success($teachers);
@@ -30,7 +30,7 @@ $router->get('/api/teachers-list', function () {
 // GET /api/staff-list
 $router->get('/api/staff-list', function () {
     $staff = Database::fetchAll(
-        "SELECT id, name, designation, mobile, photo_path 
+        "SELECT id, name, name_bangla, designation, mobile, photo_path 
          FROM staff ORDER BY name"
     );
     Response::success($staff);

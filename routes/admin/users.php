@@ -62,30 +62,42 @@ $router->post('/api/admin/users', function () {
 $router->put('/api/admin/users/{id}', function (array $params) {
     Auth::requireRole('admin');
 
-    $data = json_decode(file_get_contents('php://input'), true);
+    try {
+        $data = json_decode(file_get_contents('php://input'), true);
 
-    // Update basic info
-    $updateData = [];
-    foreach (['name', 'email', 'gender', 'status', 'date_of_birth'] as $f) {
-        if (isset($data[$f])) $updateData[$f] = $data[$f];
-    }
-    if (isset($data['password']) && !empty($data['password'])) {
-        $updateData['password_hash'] = Auth::hashPassword($data['password']);
-    }
-
-    if (!empty($updateData)) {
-        Database::update('users', $updateData, 'id = ?', ['id' => $params['id']]);
-    }
-
-    // Update roles
-    if (isset($data['roles']) && is_array($data['roles'])) {
-        Database::delete('user_roles', 'user_id = ?', [$params['id']]);
-        foreach ($data['roles'] as $role) {
-            Database::insert('user_roles', ['user_id' => $params['id'], 'role' => $role]);
+        // Check duplicate email (excluding current user)
+        if (isset($data['email'])) {
+            $existing = Database::fetch("SELECT id FROM users WHERE email = ? AND id != ?", [$data['email'], $params['id']]);
+            if ($existing) {
+                Response::error('Email already exists', 409);
+            }
         }
-    }
 
-    Response::success(null, 'User updated');
+        // Update basic info
+        $updateData = [];
+        foreach (['name', 'email', 'gender', 'status', 'date_of_birth'] as $f) {
+            if (isset($data[$f])) $updateData[$f] = $data[$f];
+        }
+        if (isset($data['password']) && !empty($data['password'])) {
+            $updateData['password_hash'] = Auth::hashPassword($data['password']);
+        }
+
+        if (!empty($updateData)) {
+            Database::update('users', $updateData, 'id = ?', ['id' => $params['id']]);
+        }
+
+        // Update roles
+        if (isset($data['roles']) && is_array($data['roles'])) {
+            Database::delete('user_roles', 'user_id = ?', [$params['id']]);
+            foreach ($data['roles'] as $role) {
+                Database::insert('user_roles', ['user_id' => $params['id'], 'role' => $role]);
+            }
+        }
+
+        Response::success(null, 'User updated');
+    } catch (\Throwable $e) {
+        Response::error('Failed to update user: ' . $e->getMessage(), 500);
+    }
 });
 
 // DELETE /api/admin/users/{id}

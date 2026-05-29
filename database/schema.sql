@@ -273,7 +273,8 @@ CREATE TABLE governing_body (
     id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
     designation VARCHAR(100) NOT NULL,
-    position VARCHAR(100) NOT NULL,
+    position VARCHAR(100) DEFAULT NULL,
+    mobile VARCHAR(15) DEFAULT NULL,
     photo_path VARCHAR(255),
     sort_order INT DEFAULT 0
 ) ENGINE=InnoDB;
@@ -306,6 +307,25 @@ ALTER TABLE students
   ADD COLUMN student_group ENUM('Science', 'Business Studies', 'Humanities') DEFAULT NULL AFTER permanent_address,
   ADD COLUMN compulsory_subjects TEXT DEFAULT NULL AFTER student_group,
   ADD COLUMN selective_subjects TEXT DEFAULT NULL AFTER compulsory_subjects;
+
+-- Migration: Add new columns for enhanced teacher/staff management
+ALTER TABLE teachers
+  ADD COLUMN name_bangla VARCHAR(255) DEFAULT NULL AFTER name,
+  ADD COLUMN name_english VARCHAR(255) DEFAULT NULL AFTER name_bangla,
+  ADD COLUMN first_mpo_date DATE DEFAULT NULL AFTER joining_date,
+  ADD COLUMN nid_number VARCHAR(50) DEFAULT NULL AFTER first_mpo_date,
+  ADD COLUMN whatsapp_number VARCHAR(15) DEFAULT NULL AFTER mobile,
+  ADD COLUMN present_address TEXT DEFAULT NULL AFTER email,
+  ADD COLUMN permanent_address TEXT DEFAULT NULL AFTER present_address;
+
+ALTER TABLE staff
+  ADD COLUMN name_bangla VARCHAR(255) DEFAULT NULL AFTER name,
+  ADD COLUMN name_english VARCHAR(255) DEFAULT NULL AFTER name_bangla,
+  ADD COLUMN first_mpo_date DATE DEFAULT NULL AFTER joining_date,
+  ADD COLUMN nid_number VARCHAR(50) DEFAULT NULL AFTER first_mpo_date,
+  ADD COLUMN whatsapp_number VARCHAR(15) DEFAULT NULL AFTER mobile,
+  ADD COLUMN present_address TEXT DEFAULT NULL AFTER email,
+  ADD COLUMN permanent_address TEXT DEFAULT NULL AFTER present_address;
 
 -- Site settings (key-value)
 CREATE TABLE site_settings (

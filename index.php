@@ -32,6 +32,7 @@ $router = new Router();
 require __DIR__ . '/routes/auth.php';
 
 // ============= PUBLIC ROUTES =============
+require __DIR__ . '/routes/subjects.php';
 require __DIR__ . '/routes/public/notices.php';
 require __DIR__ . '/routes/public/results.php';
 require __DIR__ . '/routes/public/routines.php';
@@ -91,6 +92,7 @@ require __DIR__ . '/routes/admin/transactions.php';
 require __DIR__ . '/routes/admin/leave.php';
 require __DIR__ . '/routes/admin/settings.php';
 require __DIR__ . '/routes/admin/governing-body.php'; // GET/POST/PUT/DELETE /api/admin/governing-body
+require __DIR__ . '/routes/admin/subjects.php';
 require __DIR__ . '/routes/admin/students.php';
 
 // Dispatch

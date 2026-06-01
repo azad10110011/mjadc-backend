@@ -76,7 +76,7 @@ class Database
     public static function delete(string $table, string $where, array $params = []): int
     {
         $sql = "DELETE FROM {$table} WHERE {$where}";
-        $stmt = self::query($sql, $params);
+        $stmt = self::query($sql, array_values($params));
         return $stmt->rowCount();
     }
 }

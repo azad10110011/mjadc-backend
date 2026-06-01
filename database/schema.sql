@@ -150,10 +150,13 @@ CREATE TABLE tuition_fees (
 CREATE TABLE leave_allocations (
     id INT AUTO_INCREMENT PRIMARY KEY,
     role_type ENUM('teacher', 'staff', 'principal') NOT NULL,
+    user_id INT NULL,
     leave_type ENUM('casual', 'medical', 'maternity', 'without_pay') NOT NULL,
     total_days INT NOT NULL DEFAULT 0,
+    period ENUM('yearly', 'lifetime') DEFAULT 'yearly',
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    UNIQUE KEY unique_allocation (role_type, leave_type)
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    UNIQUE KEY unique_allocation (role_type, leave_type, user_id, period)
 ) ENGINE=InnoDB;
 
 -- Leave taken tracker
@@ -162,9 +165,10 @@ CREATE TABLE leave_taken (
     user_id INT NOT NULL,
     year YEAR NOT NULL,
     leave_type ENUM('casual', 'medical', 'maternity', 'without_pay') NOT NULL,
+    period ENUM('yearly', 'lifetime') DEFAULT 'yearly',
     days_taken INT DEFAULT 0,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-    UNIQUE KEY unique_leave_taken (user_id, year, leave_type)
+    UNIQUE KEY unique_leave_taken (user_id, year, leave_type, period)
 ) ENGINE=InnoDB;
 
 -- Leave applications
@@ -365,6 +369,35 @@ CREATE TABLE payments (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (student_id) REFERENCES students(id),
     FOREIGN KEY (admission_id) REFERENCES admissions(id)
+) ENGINE=InnoDB;
+
+-- Subjects (exam/paper management)
+CREATE TABLE subjects (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    code VARCHAR(20) DEFAULT NULL,
+    type ENUM('public', 'result', 'both') DEFAULT 'public',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB;
+
+-- Subject papers (result papers under each subject)
+CREATE TABLE subject_papers (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    parent_id INT NOT NULL,
+    name VARCHAR(100) NOT NULL,
+    code VARCHAR(20) DEFAULT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (parent_id) REFERENCES subjects(id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+-- Subject parts (MCQ/CQ/Practical parts under each paper)
+CREATE TABLE subject_parts (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    subject VARCHAR(100) NOT NULL,
+    part_name VARCHAR(50) NOT NULL,
+    full_mark DECIMAL(5,2) NOT NULL DEFAULT 0,
+    pass_mark DECIMAL(5,2) NOT NULL DEFAULT 0,
+    sort_order INT DEFAULT 0
 ) ENGINE=InnoDB;
 
 -- Notification log

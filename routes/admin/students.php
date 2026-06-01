@@ -7,7 +7,7 @@ $router->get('/api/admin/students', function () {
         "SELECT s.*, u.status as user_status, u.id as user_id
          FROM students s
          LEFT JOIN users u ON s.user_id = u.id
-         ORDER BY s.created_at DESC"
+         ORDER BY s.sort_order, s.name"
     );
     foreach ($students as &$s) {
         $s['compulsory_subjects'] = $s['compulsory_subjects'] ? json_decode($s['compulsory_subjects'], true) : [];
@@ -66,6 +66,7 @@ $router->post('/api/admin/students', function () {
     ]);
     Database::insert('user_roles', ['user_id' => $userId, 'role' => 'student']);
 
+    $maxSort = Database::fetch("SELECT COALESCE(MAX(sort_order), 0) + 1 as next FROM students");
     $studentId = Database::insert('students', [
         'user_id' => $userId,
         'student_id' => $data['student_id'],
@@ -88,6 +89,7 @@ $router->post('/api/admin/students', function () {
         'compulsory_subjects' => isset($data['compulsory_subjects']) ? json_encode($data['compulsory_subjects']) : null,
         'selective_subjects' => isset($data['selective_subjects']) ? json_encode($data['selective_subjects']) : null,
         'photo_path' => $data['photo_path'] ?? null,
+        'sort_order' => $maxSort['next'],
     ]);
 
     Response::created(['id' => $studentId, 'user_id' => $userId], 'Student created');
@@ -204,4 +206,38 @@ $router->delete('/api/admin/students/{id}', function (array $params) {
     }
     Database::delete('students', 'id = ?', [$params['id']]);
     Response::success(null, 'Student deleted');
+});
+
+// POST /api/admin/students/{id}/move-up
+$router->post('/api/admin/students/{id}/move-up', function (array $params) {
+    Auth::requireRole('admin');
+    $current = Database::fetch("SELECT id, sort_order FROM students WHERE id = ?", [$params['id']]);
+    if (!$current) Response::notFound('Student not found');
+
+    $prev = Database::fetch(
+        "SELECT id, sort_order FROM students WHERE sort_order < ? ORDER BY sort_order DESC LIMIT 1",
+        [$current['sort_order']]
+    );
+    if (!$prev) Response::error('Already at top', 400);
+
+    Database::update('students', ['sort_order' => $prev['sort_order']], 'id = ?', ['id' => $current['id']]);
+    Database::update('students', ['sort_order' => $current['sort_order']], 'id = ?', ['id' => $prev['id']]);
+    Response::success(null, 'Reordered');
+});
+
+// POST /api/admin/students/{id}/move-down
+$router->post('/api/admin/students/{id}/move-down', function (array $params) {
+    Auth::requireRole('admin');
+    $current = Database::fetch("SELECT id, sort_order FROM students WHERE id = ?", [$params['id']]);
+    if (!$current) Response::notFound('Student not found');
+
+    $next = Database::fetch(
+        "SELECT id, sort_order FROM students WHERE sort_order > ? ORDER BY sort_order ASC LIMIT 1",
+        [$current['sort_order']]
+    );
+    if (!$next) Response::error('Already at bottom', 400);
+
+    Database::update('students', ['sort_order' => $next['sort_order']], 'id = ?', ['id' => $current['id']]);
+    Database::update('students', ['sort_order' => $current['sort_order']], 'id = ?', ['id' => $next['id']]);
+    Response::success(null, 'Reordered');
 });

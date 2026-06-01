@@ -3,7 +3,7 @@
 // GET /api/admin/subjects/tree – subjects with nested papers and parts
 $router->get('/api/admin/subjects/tree', function () {
     Auth::requireRole('admin');
-    $subjects = Database::fetchAll("SELECT * FROM subjects ORDER BY name");
+    $subjects = Database::fetchAll("SELECT * FROM subjects ORDER BY `group`, name");
     foreach ($subjects as &$s) {
         $papers = Database::fetchAll("SELECT * FROM subject_papers WHERE parent_id = ? ORDER BY name", [$s['id']]);
         foreach ($papers as &$p) {
@@ -13,6 +13,31 @@ $router->get('/api/admin/subjects/tree', function () {
         $s['parts'] = Database::fetchAll("SELECT * FROM subject_parts WHERE subject = ? ORDER BY sort_order", [$s['name']]);
     }
     Response::success($subjects);
+});
+
+// GET /api/admin/subjects/by-group?group=Science – subjects filtered by group (Common group included)
+$router->get('/api/admin/subjects/by-group', function () {
+    Auth::requireRole('admin');
+    $group = $_GET['group'] ?? '';
+    if (!$group) {
+        $subjects = Database::fetchAll("SELECT * FROM subjects ORDER BY name");
+    } else {
+        $subjects = Database::fetchAll(
+            "SELECT * FROM subjects WHERE `group` = ? OR `group` = 'Common' ORDER BY `group`, name",
+            [$group]
+        );
+    }
+    $result = [];
+    foreach ($subjects as $s) {
+        $papers = Database::fetchAll("SELECT * FROM subject_papers WHERE parent_id = ? ORDER BY name", [$s['id']]);
+        foreach ($papers as &$p) {
+            $p['parts'] = Database::fetchAll("SELECT * FROM subject_parts WHERE subject = ? ORDER BY sort_order", [$p['name']]);
+        }
+        $s['papers'] = $papers;
+        $s['parts'] = Database::fetchAll("SELECT * FROM subject_parts WHERE subject = ? ORDER BY sort_order", [$s['name']]);
+        $result[] = $s;
+    }
+    Response::success($result);
 });
 
 // POST /api/admin/subjects – create subject or paper
@@ -38,6 +63,7 @@ $router->post('/api/admin/subjects', function () {
             'type' => $type,
         ];
         if (!empty($data['code'])) $insertData['code'] = $data['code'];
+        if (!empty($data['group'])) $insertData['group'] = $data['group'];
         $id = Database::insert('subjects', $insertData);
     }
     Response::created(['id' => $id]);
@@ -53,6 +79,7 @@ $router->put('/api/admin/subjects/{id}', function (array $params) {
     $id = (int)$params['id'];
     $updateData = ['name' => $name];
     if (isset($data['code'])) $updateData['code'] = $data['code'];
+    if (isset($data['group'])) $updateData['group'] = $data['group'];
     $updated = Database::update('subjects', $updateData, 'id = ?', ['id' => $id]);
     if ($updated === 0) {
         $paperUpdate = ['name' => $name];

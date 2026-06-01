@@ -13,7 +13,7 @@ $router->get('/api/governing-body', function () {
 $router->get('/api/teachers-council', function () {
     $members = Database::fetchAll(
         "SELECT id, name, designation, COALESCE(position, '') as position, photo_path 
-         FROM teachers ORDER BY name"
+         FROM teachers ORDER BY sort_order"
     );
     Response::success($members);
 });
@@ -22,7 +22,7 @@ $router->get('/api/teachers-council', function () {
 $router->get('/api/teachers-list', function () {
     $teachers = Database::fetchAll(
         "SELECT id, name, name_bangla, designation, subject, email, mobile, photo_path 
-         FROM teachers ORDER BY name"
+         FROM teachers ORDER BY sort_order"
     );
     Response::success($teachers);
 });
@@ -31,7 +31,7 @@ $router->get('/api/teachers-list', function () {
 $router->get('/api/staff-list', function () {
     $staff = Database::fetchAll(
         "SELECT id, name, name_bangla, designation, mobile, photo_path 
-         FROM staff ORDER BY name"
+         FROM staff ORDER BY sort_order"
     );
     Response::success($staff);
 });
@@ -40,7 +40,7 @@ $router->get('/api/staff-list', function () {
 $router->get('/api/co-curricular/{club}', function (array $params) {
     $members = Database::fetchAll(
         "SELECT id, club, name, designation, mobile, photo_path 
-         FROM co_curricular WHERE club = ?",
+         FROM co_curricular WHERE club = ? ORDER BY sort_order",
         [$params['club']]
     );
     Response::success($members);
@@ -63,7 +63,7 @@ $router->get('/api/departments/{dept}/teachers', function (array $params) {
     $placeholders = implode(',', array_fill(0, count($subjects), '?'));
     $teachers = Database::fetchAll(
         "SELECT id, name, designation, subject, email, mobile, photo_path 
-         FROM teachers WHERE subject IN ({$placeholders}) ORDER BY name",
+         FROM teachers WHERE subject IN ({$placeholders}) ORDER BY sort_order",
         $subjects
     );
     Response::success($teachers);

@@ -1,11 +1,28 @@
 <?php
 
-// GET /api/subjects – returns flat list of all subject names
+// GET /api/subjects?group=Science – returns flat list of subject names
+// If group is provided, only subjects with that group (or 'Common') are returned
 $router->get('/api/subjects', function () {
-    $subjects = array_unique(array_merge(
-        array_column(Database::fetchAll("SELECT DISTINCT name FROM subjects WHERE type IN ('public','both')"), 'name'),
-        array_column(Database::fetchAll("SELECT DISTINCT sp.name FROM subject_papers sp JOIN subjects s ON sp.parent_id = s.id WHERE s.type IN ('result','both')"), 'name')
-    ));
-    sort($subjects);
-    Response::success(array_values($subjects));
+    $group = $_GET['group'] ?? '';
+
+    if ($group) {
+        $subjectNames = array_unique(array_merge(
+            array_column(Database::fetchAll(
+                "SELECT DISTINCT name FROM subjects WHERE (type IN ('public','both')) AND (`group` = ? OR `group` = 'Common')",
+                [$group]
+            ), 'name'),
+            array_column(Database::fetchAll(
+                "SELECT DISTINCT sp.name FROM subject_papers sp JOIN subjects s ON sp.parent_id = s.id WHERE s.type IN ('result','both') AND (s.`group` = ? OR s.`group` = 'Common')",
+                [$group]
+            ), 'name')
+        ));
+    } else {
+        $subjectNames = array_unique(array_merge(
+            array_column(Database::fetchAll("SELECT DISTINCT name FROM subjects WHERE type IN ('public','both')"), 'name'),
+            array_column(Database::fetchAll("SELECT DISTINCT sp.name FROM subject_papers sp JOIN subjects s ON sp.parent_id = s.id WHERE s.type IN ('result','both')"), 'name')
+        ));
+    }
+
+    sort($subjectNames);
+    Response::success(array_values($subjectNames));
 });

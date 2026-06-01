@@ -1,5 +1,52 @@
 <?php
 
+// GET /api/teacher/profile – returns teacher info including group
+$router->get('/api/teacher/profile', function () {
+    $user = Auth::requireAnyRole(['teacher', 'exam_controller']);
+    $teacher = Database::fetch(
+        "SELECT t.*, u.email, u.date_of_birth 
+         FROM teachers t 
+         JOIN users u ON t.user_id = u.id 
+         WHERE t.user_id = ?",
+        [$user['id']]
+    );
+    if (!$teacher) {
+        Response::success(array_merge($user, ['group' => null, 'result_subjects' => []]));
+        return;
+    }
+    $teacher['roles'] = $user['roles'];
+    Response::success($teacher);
+});
+
+// GET /api/teacher/subjects – returns subject names filtered by teacher's group
+$router->get('/api/teacher/subjects', function () {
+    $user = Auth::requireAnyRole(['teacher', 'exam_controller']);
+
+    $teacher = Database::fetch("SELECT `group` FROM teachers WHERE user_id = ?", [$user['id']]);
+    $group = $teacher ? $teacher['group'] : null;
+
+    if ($group && $group !== 'Common') {
+        $names = array_unique(array_merge(
+            array_column(Database::fetchAll(
+                "SELECT DISTINCT name FROM subjects WHERE (`group` = ? OR `group` = 'Common') AND type IN ('public','both')",
+                [$group]
+            ), 'name'),
+            array_column(Database::fetchAll(
+                "SELECT DISTINCT sp.name FROM subject_papers sp JOIN subjects s ON sp.parent_id = s.id WHERE (s.`group` = ? OR s.`group` = 'Common') AND s.type IN ('result','both')",
+                [$group]
+            ), 'name')
+        ));
+    } else {
+        // Common group or no group set: show all
+        $names = array_unique(array_merge(
+            array_column(Database::fetchAll("SELECT DISTINCT name FROM subjects WHERE type IN ('public','both')"), 'name'),
+            array_column(Database::fetchAll("SELECT DISTINCT sp.name FROM subject_papers sp JOIN subjects s ON sp.parent_id = s.id WHERE s.type IN ('result','both')"), 'name')
+        ));
+    }
+    sort($names);
+    Response::success(array_values($names));
+});
+
 // POST /api/teacher/results/upload
 $router->post('/api/teacher/results/upload', function () {
     $user = Auth::requireRole('teacher');

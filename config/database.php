@@ -47,7 +47,7 @@ class Database
 
     public static function insert(string $table, array $data): int
     {
-        $columns = implode(', ', array_keys($data));
+        $columns = '`' . implode('`, `', array_keys($data)) . '`';
         $placeholders = ':' . implode(', :', array_keys($data));
 
         $sql = "INSERT INTO {$table} ({$columns}) VALUES ({$placeholders})";
@@ -61,7 +61,7 @@ class Database
         $sets = [];
         $params = [];
         foreach ($data as $col => $val) {
-            $sets[] = "{$col} = ?";
+            $sets[] = "`{$col}` = ?";
             $params[] = $val;
         }
         $setStr = implode(', ', $sets);

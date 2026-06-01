@@ -41,6 +41,7 @@ CREATE TABLE students (
     gender ENUM('male', 'female') NOT NULL,
     address TEXT,
     photo_path VARCHAR(255),
+    sort_order INT DEFAULT 0,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
@@ -54,10 +55,12 @@ CREATE TABLE teachers (
     gender ENUM('male', 'female') NOT NULL,
     designation VARCHAR(50) NOT NULL,
     subject VARCHAR(50),
+    `group` ENUM('Science', 'Business Studies', 'Humanities', 'Common') DEFAULT NULL,
     joining_date DATE NOT NULL,
     mobile VARCHAR(15),
     email VARCHAR(100),
     photo_path VARCHAR(255),
+    sort_order INT DEFAULT 0,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
@@ -75,6 +78,7 @@ CREATE TABLE staff (
     mobile VARCHAR(15),
     email VARCHAR(100),
     photo_path VARCHAR(255),
+    sort_order INT DEFAULT 0,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
@@ -290,7 +294,8 @@ CREATE TABLE co_curricular (
     name VARCHAR(100) NOT NULL,
     designation VARCHAR(100),
     mobile VARCHAR(15),
-    photo_path VARCHAR(255)
+    photo_path VARCHAR(255),
+    sort_order INT DEFAULT 0
 ) ENGINE=InnoDB;
 
 -- Annual reports
@@ -377,6 +382,7 @@ CREATE TABLE subjects (
     name VARCHAR(100) NOT NULL,
     code VARCHAR(20) DEFAULT NULL,
     type ENUM('public', 'result', 'both') DEFAULT 'public',
+    `group` ENUM('Science', 'Business Studies', 'Humanities', 'Common') DEFAULT 'Common',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB;
 

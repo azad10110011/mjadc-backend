@@ -40,6 +40,7 @@ $router->post('/api/principal/teachers', function () {
         'gender' => $data['gender'],
         'designation' => $data['designation'],
         'subject' => $data['subject'] ?? null,
+        'group' => $data['group'] ?? null,
         'joining_date' => $data['joining_date'],
         'mobile' => $data['mobile'],
         'email' => $data['email'],
@@ -61,7 +62,7 @@ $router->get('/api/principal/teachers', function () {
     Auth::requireRole('principal');
 
     $teachers = Database::fetchAll(
-        "SELECT t.id, t.name, t.name_bangla, t.name_english, t.designation, t.subject, t.joining_date, t.first_mpo_date, t.nid_number, t.mobile, t.whatsapp_number, t.email, t.photo_path, t.present_address, t.permanent_address, u.date_of_birth
+        "SELECT t.id, t.name, t.name_bangla, t.name_english, t.designation, t.subject, t.`group`, t.joining_date, t.first_mpo_date, t.nid_number, t.mobile, t.whatsapp_number, t.email, t.photo_path, t.present_address, t.permanent_address, u.date_of_birth
          FROM teachers t LEFT JOIN users u ON t.user_id = u.id ORDER BY t.name"
     );
     Response::success($teachers);

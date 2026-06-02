@@ -4,6 +4,10 @@
 $router->get('/api/admin/teachers-staff/teachers', function () {
     Auth::requireRole('admin');
     $teachers = Database::fetchAll("SELECT t.id, t.name, t.name_bangla, t.name_english, t.designation, t.subject, t.`group`, t.email, t.mobile, t.whatsapp_number, t.photo_path, t.joining_date, t.first_mpo_date, t.nid_number, t.present_address, t.permanent_address, t.gender, u.date_of_birth FROM teachers t LEFT JOIN users u ON t.user_id = u.id ORDER BY t.sort_order, t.name");
+    $now = new DateTime();
+    foreach ($teachers as &$t) {
+        $t['experience'] = $t['first_mpo_date'] ? $now->diff(new DateTime($t['first_mpo_date']))->format('%y years, %m months, %d days') : null;
+    }
     Response::success($teachers);
 });
 
@@ -11,6 +15,10 @@ $router->get('/api/admin/teachers-staff/teachers', function () {
 $router->get('/api/admin/teachers-staff/staff', function () {
     Auth::requireRole('admin');
     $staff = Database::fetchAll("SELECT s.id, s.name, s.name_bangla, s.name_english, s.designation, s.subject, s.email, s.mobile, s.whatsapp_number, s.photo_path, s.joining_date, s.first_mpo_date, s.nid_number, s.present_address, s.permanent_address, s.gender, u.date_of_birth FROM staff s LEFT JOIN users u ON s.user_id = u.id ORDER BY s.sort_order, s.name");
+    $now = new DateTime();
+    foreach ($staff as &$s) {
+        $s['experience'] = $s['first_mpo_date'] ? $now->diff(new DateTime($s['first_mpo_date']))->format('%y years, %m months, %d days') : null;
+    }
     Response::success($staff);
 });
 

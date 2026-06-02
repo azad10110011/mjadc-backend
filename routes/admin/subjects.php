@@ -15,7 +15,7 @@ $router->get('/api/admin/subjects/tree', function () {
     Response::success($subjects);
 });
 
-// GET /api/admin/subjects/by-group?group=Science – subjects filtered by group (Common group included)
+// GET /api/admin/subjects/by-group?group=Science – subjects filtered by group (General group included)
 $router->get('/api/admin/subjects/by-group', function () {
     Auth::requireRole('admin');
     $group = $_GET['group'] ?? '';
@@ -23,7 +23,7 @@ $router->get('/api/admin/subjects/by-group', function () {
         $subjects = Database::fetchAll("SELECT * FROM subjects ORDER BY name");
     } else {
         $subjects = Database::fetchAll(
-            "SELECT * FROM subjects WHERE `group` = ? OR `group` = 'Common' ORDER BY `group`, name",
+            "SELECT * FROM subjects WHERE `group` = ? OR `group` = 'General' ORDER BY `group`, name",
             [$group]
         );
     }
@@ -80,6 +80,7 @@ $router->put('/api/admin/subjects/{id}', function (array $params) {
     $updateData = ['name' => $name];
     if (isset($data['code'])) $updateData['code'] = $data['code'];
     if (isset($data['group'])) $updateData['group'] = $data['group'];
+    if (isset($data['type'])) $updateData['type'] = $data['type'];
     $updated = Database::update('subjects', $updateData, 'id = ?', ['id' => $id]);
     if ($updated === 0) {
         $paperUpdate = ['name' => $name];

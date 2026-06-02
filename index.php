@@ -43,8 +43,13 @@ require __DIR__ . '/routes/public/events.php';
 require __DIR__ . '/routes/public/pages.php';
 require __DIR__ . '/routes/public/admissions.php';
 require __DIR__ . '/routes/public/payments.php';
+require __DIR__ . '/routes/public/contact.php';
 require __DIR__ . '/routes/public/settings.php';
 require __DIR__ . '/routes/public/directory.php';
+require __DIR__ . '/routes/public/principals.php';
+require __DIR__ . '/routes/public/academic-approvals.php';
+require __DIR__ . '/routes/public/achievements.php';
+require __DIR__ . '/routes/public/student-info.php';
 
 // ============= STUDENT ROUTES =============
 require __DIR__ . '/routes/student/dashboard.php';
@@ -90,11 +95,17 @@ require __DIR__ . '/routes/admin/users.php';
 require __DIR__ . '/routes/admin/fees.php';
 require __DIR__ . '/routes/admin/transactions.php';
 require __DIR__ . '/routes/admin/leave.php';
+require __DIR__ . '/routes/admin/contact.php';
 require __DIR__ . '/routes/admin/settings.php';
 require __DIR__ . '/routes/admin/governing-body.php'; // GET/POST/PUT/DELETE /api/admin/governing-body
 require __DIR__ . '/routes/admin/co-curricular.php'; // GET/POST/PUT/DELETE /api/admin/co-curricular/{club}
 require __DIR__ . '/routes/admin/subjects.php';
 require __DIR__ . '/routes/admin/students.php';
+require __DIR__ . '/routes/admin/principals.php';
+require __DIR__ . '/routes/admin/academic-approvals.php';
+require __DIR__ . '/routes/admin/achievements.php';
+require __DIR__ . '/routes/admin/gallery.php';
+require __DIR__ . '/routes/admin/student-info.php';
 
 // Dispatch
 $router->dispatch();

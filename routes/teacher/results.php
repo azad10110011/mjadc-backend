@@ -25,19 +25,19 @@ $router->get('/api/teacher/subjects', function () {
     $teacher = Database::fetch("SELECT `group` FROM teachers WHERE user_id = ?", [$user['id']]);
     $group = $teacher ? $teacher['group'] : null;
 
-    if ($group && $group !== 'Common') {
+    if ($group && $group !== 'General') {
         $names = array_unique(array_merge(
             array_column(Database::fetchAll(
-                "SELECT DISTINCT name FROM subjects WHERE (`group` = ? OR `group` = 'Common') AND type IN ('public','both')",
+                "SELECT DISTINCT name FROM subjects WHERE (`group` = ? OR `group` = 'General') AND type IN ('public','both')",
                 [$group]
             ), 'name'),
             array_column(Database::fetchAll(
-                "SELECT DISTINCT sp.name FROM subject_papers sp JOIN subjects s ON sp.parent_id = s.id WHERE (s.`group` = ? OR s.`group` = 'Common') AND s.type IN ('result','both')",
+                "SELECT DISTINCT sp.name FROM subject_papers sp JOIN subjects s ON sp.parent_id = s.id WHERE (s.`group` = ? OR s.`group` = 'General') AND s.type IN ('result','both')",
                 [$group]
             ), 'name')
         ));
     } else {
-        // Common group or no group set: show all
+        // General group or no group set: show all
         $names = array_unique(array_merge(
             array_column(Database::fetchAll("SELECT DISTINCT name FROM subjects WHERE type IN ('public','both')"), 'name'),
             array_column(Database::fetchAll("SELECT DISTINCT sp.name FROM subject_papers sp JOIN subjects s ON sp.parent_id = s.id WHERE s.type IN ('result','both')"), 'name')

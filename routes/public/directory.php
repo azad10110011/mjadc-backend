@@ -48,23 +48,23 @@ $router->get('/api/co-curricular/{club}', function (array $params) {
 
 // GET /api/departments/{dept}/teachers
 $router->get('/api/departments/{dept}/teachers', function (array $params) {
-    $deptMap = [
-        'science' => ['Physics', 'Chemistry', 'Botany', 'Higher Math'],
-        'business-studies' => ['Management', 'Marketing', 'Production Management & Marketing', 'Accounting', 'Finance Banking & Insurance', 'Finance & Banking'],
-        'humanities' => ['Bangla', 'English', 'Political Science', 'Economics', 'Geography', 'Philosophy', 'Sociology', 'Social Welfare', 'History', 'Islamic History', 'Islamic Studies', 'Psychology', 'Statistics', 'Agriculture', 'Home Economics'],
-        'bmt' => ['Management', 'Marketing', 'Production Management & Marketing', 'Accounting'],
+    $groupMap = [
+        'science' => 'Science',
+        'business-studies' => 'Business Studies',
+        'humanities' => 'Humanities',
+        'general' => 'General',
+        'bmt' => 'BMT',
     ];
 
-    $subjects = $deptMap[$params['dept']] ?? [];
-    if (empty($subjects)) {
+    $group = $groupMap[$params['dept']] ?? null;
+    if (!$group) {
         Response::notFound('Department not found');
     }
 
-    $placeholders = implode(',', array_fill(0, count($subjects), '?'));
     $teachers = Database::fetchAll(
         "SELECT id, name, designation, subject, email, mobile, photo_path 
-         FROM teachers WHERE subject IN ({$placeholders}) ORDER BY sort_order",
-        $subjects
+         FROM teachers WHERE `group` = ? ORDER BY sort_order",
+        [$group]
     );
     Response::success($teachers);
 });

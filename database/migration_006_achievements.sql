@@ -1,0 +1,18 @@
+-- Migration 006: Achievements table
+
+CREATE TABLE IF NOT EXISTS achievements (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    title VARCHAR(255) NOT NULL,
+    sort_order INT DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS achievement_images (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    achievement_id INT NOT NULL,
+    image_path VARCHAR(255) NOT NULL,
+    sort_order INT DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (achievement_id) REFERENCES achievements(id) ON DELETE CASCADE
+) ENGINE=InnoDB;

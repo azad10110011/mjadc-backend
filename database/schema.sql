@@ -55,16 +55,13 @@ CREATE TABLE teachers (
     gender ENUM('male', 'female') NOT NULL,
     designation VARCHAR(50) NOT NULL,
     subject VARCHAR(50),
-    `group` ENUM('Science', 'Business Studies', 'Humanities', 'Common') DEFAULT NULL,
+    `group` ENUM('Science', 'Business Studies', 'Humanities', 'General', 'BMT') DEFAULT NULL,
     joining_date DATE NOT NULL,
     mobile VARCHAR(15),
     email VARCHAR(100),
     photo_path VARCHAR(255),
     sort_order INT DEFAULT 0,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
-) ENGINE=InnoDB;
 
 -- Staff
 CREATE TABLE staff (
@@ -298,6 +295,44 @@ CREATE TABLE co_curricular (
     sort_order INT DEFAULT 0
 ) ENGINE=InnoDB;
 
+-- Principals (Principal & Vice-Principal)
+CREATE TABLE principals (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    designation VARCHAR(100) NOT NULL,
+    message TEXT DEFAULT NULL,
+    photo_path VARCHAR(255) DEFAULT NULL,
+    sort_order INT DEFAULT 0
+) ENGINE=InnoDB;
+
+-- Academic approvals
+CREATE TABLE academic_approvals (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    heading VARCHAR(255) NOT NULL,
+    image_path VARCHAR(255) DEFAULT NULL,
+    image_width INT DEFAULT NULL,
+    image_height INT DEFAULT NULL,
+    sort_order INT DEFAULT 0
+) ENGINE=InnoDB;
+
+-- Achievements
+CREATE TABLE achievements (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    title VARCHAR(255) NOT NULL,
+    sort_order INT DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB;
+
+CREATE TABLE achievement_images (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    achievement_id INT NOT NULL,
+    image_path VARCHAR(255) NOT NULL,
+    sort_order INT DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (achievement_id) REFERENCES achievements(id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
 -- Annual reports
 CREATE TABLE annual_reports (
     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -382,7 +417,7 @@ CREATE TABLE subjects (
     name VARCHAR(100) NOT NULL,
     code VARCHAR(20) DEFAULT NULL,
     type ENUM('public', 'result', 'both') DEFAULT 'public',
-    `group` ENUM('Science', 'Business Studies', 'Humanities', 'Common') DEFAULT 'Common',
+    `group` ENUM('Science', 'Business Studies', 'Humanities', 'General', 'BMT') DEFAULT 'General',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB;
 

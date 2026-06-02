@@ -12,6 +12,7 @@ $router->get('/api/settings/footer-text', function () {
 
 // GET /api/settings/last-updated
 $router->get('/api/settings/last-updated', function () {
+    Database::query("SET time_zone = '+06:00'");
     $setting = Database::fetch(
         "SELECT MAX(ts) AS last_updated FROM (
             SELECT MAX(updated_at) AS ts FROM site_settings
@@ -36,8 +37,10 @@ $router->get('/api/settings/last-updated', function () {
             UNION ALL SELECT MAX(submitted_at) AS ts FROM admissions
         ) AS all_updates"
     );
+    $lastUpdated = $setting && $setting['last_updated'] ? $setting['last_updated'] : date('Y-m-d H:i:s');
+    $dt = new DateTime($lastUpdated, new DateTimeZone('Asia/Dhaka'));
     Response::success([
-        'last_updated' => $setting && $setting['last_updated'] ? $setting['last_updated'] : date('Y-m-d H:i:s'),
+        'last_updated' => $dt->format('Y-m-d H:i:s'),
     ]);
 });
 

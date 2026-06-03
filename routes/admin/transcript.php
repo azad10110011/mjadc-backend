@@ -75,25 +75,72 @@ $router->post('/api/admin/transcript', function () {
         $optionalGp = 0;
         $hasOptional = !empty($student['optional_subject']);
 
+        // Look up optional subject's papers (public name → paper names)
+        $optionalPaperNames = [];
+        $optionalPublicName = '';
+        if ($hasOptional) {
+            $optSubj = Database::fetch(
+                "SELECT id, name FROM subjects WHERE name = ?",
+                [$student['optional_subject']]
+            );
+            if ($optSubj) {
+                $optionalPublicName = $optSubj['name'];
+                $optionalPaperNames = array_column(Database::fetchAll(
+                    "SELECT name FROM subject_papers WHERE parent_id = ?",
+                    [$optSubj['id']]
+                ), 'name');
+            }
+        }
+
+        $optionalTotalSum = 0;
+        $optionalGpaSum = 0;
+        $optionalPaperCount = 0;
+
         foreach ($studentResults as $r) {
             $gpa = (float) ($r['gpa'] ?? 0);
             $total = (float) ($r['total'] ?? ($r['mcq'] + $r['cq'] + $r['practical']));
             $grade = $r['grade'] ?? 'F';
 
-            $subjects[] = [
-                'subject' => $r['subject'],
-                'total' => $total,
-                'grade' => $grade,
-                'gpa' => $gpa,
-                'status' => $r['status'],
-            ];
+            // Check if this result belongs to the optional subject
+            $isOptionalPaper = $hasOptional && (
+                (!empty($optionalPaperNames) && in_array($r['subject'], $optionalPaperNames))
+                || $r['subject'] === $student['optional_subject']
+            );
 
-            if ($hasOptional && $r['subject'] === $student['optional_subject']) {
-                $optionalGp = max($gpa - 2, 0);
+            if ($isOptionalPaper) {
+                $optionalTotalSum += $total;
+                $optionalGpaSum += $gpa;
+                $optionalPaperCount++;
             } else {
+                $subjects[] = [
+                    'subject' => $r['subject'],
+                    'total' => $total,
+                    'grade' => $grade,
+                    'gpa' => $gpa,
+                    'status' => $r['status'],
+                ];
                 $totalPoints += $gpa;
                 $subjectCount++;
             }
+        }
+
+        // Add combined optional subject entry
+        if ($optionalPaperCount > 0) {
+            $avgTotalPerPaper = $optionalTotalSum / $optionalPaperCount;
+            $optGradeInfo = calculateGradeFromTotal($avgTotalPerPaper);
+            $optGpa = $optGradeInfo['points'];
+
+            $subjects[] = [
+                'subject' => $optionalPublicName ?: $student['optional_subject'],
+                'total' => $optionalTotalSum,
+                'grade' => $optGradeInfo['grade'],
+                'gpa' => $optGpa,
+                'status' => 'draft',
+                'is_optional' => true,
+                'paper_count' => $optionalPaperCount,
+            ];
+
+            $optionalGp = max($optGpa - 2, 0);
         }
 
         $gpaWithoutOptional = $subjectCount > 0 ? round($totalPoints / $subjectCount, 2) : 0;

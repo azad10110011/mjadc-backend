@@ -1,5 +1,88 @@
 <?php
 
+// GET /api/teacher/results/load-students – returns students with part configs for a subject
+$router->get('/api/teacher/results/load-students', function () {
+    $user = Auth::requireAnyRole(['teacher', 'exam_controller']);
+
+    $year = $_GET['year'] ?? '';
+    $class = $_GET['class'] ?? '';
+    $examName = $_GET['exam_name'] ?? '';
+    $subject = $_GET['subject'] ?? '';
+
+    if (!$year || !$class || !$examName || !$subject) {
+        Response::validationError(['year, class, exam_name, and subject are required']);
+    }
+
+    // Get subject part configs
+    $partConfigs = Database::fetchAll(
+        "SELECT part_name, full_mark, pass_mark, sort_order FROM subject_parts WHERE subject = ? ORDER BY sort_order",
+        [$subject]
+    );
+
+    if (empty($partConfigs)) {
+        // Fallback: use default mcq/cq/practical parts if none configured
+        $partConfigs = [
+            ['part_name' => 'mcq', 'full_mark' => 50, 'pass_mark' => 8, 'sort_order' => 1],
+            ['part_name' => 'cq', 'full_mark' => 50, 'pass_mark' => 17, 'sort_order' => 2],
+            ['part_name' => 'practical', 'full_mark' => 50, 'pass_mark' => 8, 'sort_order' => 3],
+        ];
+    }
+
+    // Get or create exam
+    $exam = Database::fetch(
+        "SELECT id FROM exams WHERE year = ? AND class = ? AND exam_name = ?",
+        [$year, $class, $examName]
+    );
+    $examId = $exam ? $exam['id'] : null;
+
+    // Get all students in this class
+    $students = Database::fetchAll(
+        "SELECT id, student_id, name FROM students WHERE class = ? ORDER BY student_id",
+        [$class]
+    );
+
+    $result = [];
+    foreach ($students as $student) {
+        $partsData = [];
+        $absentIn = [];
+        $resultId = null;
+        $status = null;
+
+        if ($examId) {
+            $existing = Database::fetch(
+                "SELECT * FROM exam_results WHERE student_id = ? AND exam_id = ? AND subject = ?",
+                [$student['id'], $examId, $subject]
+            );
+            if ($existing) {
+                $resultId = $existing['id'];
+                $status = $existing['status'];
+                foreach ($partConfigs as $p) {
+                    $col = strtolower($p['part_name']);
+                    $val = $existing[$col] ?? 0;
+                    $partsData[$p['part_name']] = (float) $val;
+                    if ((float) $val === 0.0 && $existing['grade'] === 'Absent') {
+                        $absentIn[] = $p['part_name'];
+                    }
+                }
+            }
+        }
+
+        $result[] = [
+            'student_id' => $student['student_id'],
+            'name' => $student['name'],
+            'result_id' => $resultId,
+            'status' => $status,
+            'parts_data' => $partsData,
+            'absent_in' => $absentIn,
+        ];
+    }
+
+    Response::success([
+        'part_configs' => $partConfigs,
+        'students' => $result,
+    ]);
+});
+
 // GET /api/teacher/profile – returns teacher info including group
 $router->get('/api/teacher/profile', function () {
     $user = Auth::requireAnyRole(['teacher', 'exam_controller']);
@@ -18,33 +101,22 @@ $router->get('/api/teacher/profile', function () {
     Response::success($teacher);
 });
 
-// GET /api/teacher/subjects – returns subject names filtered by teacher's group
+// GET /api/teacher/subjects – returns teacher's assigned result subjects only
 $router->get('/api/teacher/subjects', function () {
     $user = Auth::requireAnyRole(['teacher', 'exam_controller']);
 
-    $teacher = Database::fetch("SELECT `group` FROM teachers WHERE user_id = ?", [$user['id']]);
-    $group = $teacher ? $teacher['group'] : null;
-
-    if ($group && $group !== 'General') {
-        $names = array_unique(array_merge(
-            array_column(Database::fetchAll(
-                "SELECT DISTINCT name FROM subjects WHERE (`group` = ? OR `group` = 'General') AND type IN ('public','both')",
-                [$group]
-            ), 'name'),
-            array_column(Database::fetchAll(
-                "SELECT DISTINCT sp.name FROM subject_papers sp JOIN subjects s ON sp.parent_id = s.id WHERE (s.`group` = ? OR s.`group` = 'General') AND s.type IN ('result','both')",
-                [$group]
-            ), 'name')
-        ));
-    } else {
-        // General group or no group set: show all
-        $names = array_unique(array_merge(
-            array_column(Database::fetchAll("SELECT DISTINCT name FROM subjects WHERE type IN ('public','both')"), 'name'),
-            array_column(Database::fetchAll("SELECT DISTINCT sp.name FROM subject_papers sp JOIN subjects s ON sp.parent_id = s.id WHERE s.type IN ('result','both')"), 'name')
-        ));
+    $teacher = Database::fetch("SELECT id FROM teachers WHERE user_id = ?", [$user['id']]);
+    if (!$teacher) {
+        Response::success([]);
+        return;
     }
-    sort($names);
-    Response::success(array_values($names));
+
+    $subjects = array_column(Database::fetchAll(
+        "SELECT subject FROM teacher_subjects WHERE teacher_id = ? AND type = 'result' ORDER BY subject",
+        [$teacher['id']]
+    ), 'subject');
+
+    Response::success(array_values($subjects));
 });
 
 // POST /api/teacher/results/upload
@@ -90,21 +162,46 @@ $router->post('/api/teacher/results/upload', function () {
         );
         if (!$student) continue;
 
-        $total = ($mark['mcq'] ?? 0) + ($mark['cq'] ?? 0) + ($mark['practical'] ?? 0);
+        $partsData = $mark['parts_data'] ?? [];
+        $lowerParts = [];
+        foreach ($partsData as $k => $v) $lowerParts[strtolower($k)] = $v;
+        $mcq = (float) ($lowerParts['mcq'] ?? $mark['mcq'] ?? 0);
+        $cq = (float) ($lowerParts['cq'] ?? $mark['cq'] ?? 0);
+        $practical = (float) ($lowerParts['practical'] ?? $mark['practical'] ?? 0);
+        $total = $mcq + $cq + $practical;
         $grade = calculateGradeFromTotal($total);
 
-        Database::insert('exam_results', [
-            'student_id' => $student['id'],
-            'exam_id' => $examId,
-            'subject' => $data['subject'],
-            'mcq' => $mark['mcq'] ?? 0,
-            'cq' => $mark['cq'] ?? 0,
-            'practical' => $mark['practical'] ?? 0,
-            'grade' => $grade['grade'],
-            'gpa' => $grade['points'],
-            'status' => 'draft',
-            'uploaded_by' => $user['id'],
-        ]);
+        // Upsert
+        $existing = Database::fetch(
+            "SELECT id FROM exam_results WHERE student_id = ? AND exam_id = ? AND subject = ?",
+            [$student['id'], $examId, $data['subject']]
+        );
+
+        if ($existing) {
+            Database::update('exam_results', [
+                'mcq' => $mcq,
+                'cq' => $cq,
+                'practical' => $practical,
+                'total' => $total,
+                'grade' => $grade['grade'],
+                'gpa' => $grade['points'],
+                'status' => 'draft',
+            ], 'id = ?', ['id' => $existing['id']]);
+        } else {
+            Database::insert('exam_results', [
+                'student_id' => $student['id'],
+                'exam_id' => $examId,
+                'subject' => $data['subject'],
+                'mcq' => $mcq,
+                'cq' => $cq,
+                'practical' => $practical,
+                'total' => $total,
+                'grade' => $grade['grade'],
+                'gpa' => $grade['points'],
+                'status' => 'draft',
+                'uploaded_by' => $user['id'],
+            ]);
+        }
         $inserted++;
     }
 
@@ -140,9 +237,12 @@ $router->put('/api/teacher/results/update', function () {
         Response::forbidden('Cannot modify. Result has been approved or published.');
     }
 
-    $mcq = $data['mcq'] ?? $result['mcq'];
-    $cq = $data['cq'] ?? $result['cq'];
-    $practical = $data['practical'] ?? $result['practical'];
+    $partsData = $data['parts_data'] ?? [];
+    $lowerParts = [];
+    foreach ($partsData as $k => $v) $lowerParts[strtolower($k)] = $v;
+    $mcq = (float) ($lowerParts['mcq'] ?? $data['mcq'] ?? $result['mcq']);
+    $cq = (float) ($lowerParts['cq'] ?? $data['cq'] ?? $result['cq']);
+    $practical = (float) ($lowerParts['practical'] ?? $data['practical'] ?? $result['practical']);
     $total = $mcq + $cq + $practical;
     $grade = calculateGradeFromTotal($total);
 
@@ -150,6 +250,7 @@ $router->put('/api/teacher/results/update', function () {
         'mcq' => $mcq,
         'cq' => $cq,
         'practical' => $practical,
+        'total' => $total,
         'grade' => $grade['grade'],
         'gpa' => $grade['points'],
     ], 'id = ?', ['id' => $data['result_id']]);

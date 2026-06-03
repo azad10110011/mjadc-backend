@@ -1,5 +1,16 @@
 <?php
 
+// GET /api/exam-controller/subjects – returns exam paper names only (no public subject names)
+$router->get('/api/exam-controller/subjects', function () {
+    Auth::requireRole('exam_controller');
+
+    $names = array_column(Database::fetchAll(
+        "SELECT DISTINCT sp.name FROM subject_papers sp ORDER BY sp.name"
+    ), 'name');
+    sort($names);
+    Response::success(array_values($names));
+});
+
 // POST /api/exam-controller/results/upload
 $router->post('/api/exam-controller/results/upload', function () {
     $user = Auth::requireRole('exam_controller');
@@ -35,6 +46,20 @@ $router->post('/api/exam-controller/results/upload', function () {
     $marks = $data['marks'];
     $inserted = 0;
 
+    // Get part configs to know which fields to read
+    $partConfigs = Database::fetchAll(
+        "SELECT part_name FROM subject_parts WHERE subject = ? ORDER BY sort_order",
+        [$data['subject']]
+    );
+    if (empty($partConfigs)) {
+        // Default parts if none configured
+        $partConfigs = [
+            ['part_name' => 'mcq'],
+            ['part_name' => 'cq'],
+            ['part_name' => 'practical'],
+        ];
+    }
+
     foreach ($marks as $mark) {
         $student = Database::fetch(
             "SELECT id FROM students WHERE student_id = ? AND class = ?",
@@ -42,7 +67,13 @@ $router->post('/api/exam-controller/results/upload', function () {
         );
         if (!$student) continue;
 
-        $total = ($mark['mcq'] ?? 0) + ($mark['cq'] ?? 0) + ($mark['practical'] ?? 0);
+        $partsData = $mark['parts_data'] ?? [];
+        $lowerParts = [];
+        foreach ($partsData as $k => $v) $lowerParts[strtolower($k)] = $v;
+        $mcq = (float) ($lowerParts['mcq'] ?? $mark['mcq'] ?? 0);
+        $cq = (float) ($lowerParts['cq'] ?? $mark['cq'] ?? 0);
+        $practical = (float) ($lowerParts['practical'] ?? $mark['practical'] ?? 0);
+        $total = $mcq + $cq + $practical;
         $grade = calculateGradeFromTotal($total);
 
         // Upsert
@@ -53,9 +84,10 @@ $router->post('/api/exam-controller/results/upload', function () {
 
         if ($existing) {
             Database::update('exam_results', [
-                'mcq' => $mark['mcq'] ?? 0,
-                'cq' => $mark['cq'] ?? 0,
-                'practical' => $mark['practical'] ?? 0,
+                'mcq' => $mcq,
+                'cq' => $cq,
+                'practical' => $practical,
+                'total' => $total,
                 'grade' => $grade['grade'],
                 'gpa' => $grade['points'],
                 'status' => 'draft',
@@ -65,9 +97,10 @@ $router->post('/api/exam-controller/results/upload', function () {
                 'student_id' => $student['id'],
                 'exam_id' => $examId,
                 'subject' => $data['subject'],
-                'mcq' => $mark['mcq'] ?? 0,
-                'cq' => $mark['cq'] ?? 0,
-                'practical' => $mark['practical'] ?? 0,
+                'mcq' => $mcq,
+                'cq' => $cq,
+                'practical' => $practical,
+                'total' => $total,
                 'grade' => $grade['grade'],
                 'gpa' => $grade['points'],
                 'status' => 'draft',
@@ -78,6 +111,32 @@ $router->post('/api/exam-controller/results/upload', function () {
     }
 
     Response::created(['inserted' => $inserted], "{$inserted} results processed");
+});
+
+// GET /api/exam-controller/results/detail?exam_name=&subject=&class=
+$router->get('/api/exam-controller/results/detail', function () {
+    Auth::requireRole('exam_controller');
+
+    $examName = $_GET['exam_name'] ?? '';
+    $subject = $_GET['subject'] ?? '';
+    $class = $_GET['class'] ?? '';
+
+    if (!$examName || !$subject || !$class) {
+        Response::validationError(['exam_name, subject, and class are required']);
+    }
+
+    $results = Database::fetchAll(
+        "SELECT er.id, s.student_id, s.name, er.mcq, er.cq, er.practical,
+                er.total, er.grade, er.gpa, er.status
+         FROM exam_results er
+         JOIN students s ON er.student_id = s.id
+         JOIN exams e ON er.exam_id = e.id
+         WHERE e.exam_name = ? AND er.subject = ? AND e.class = ?
+         ORDER BY s.student_id",
+        [$examName, $subject, $class]
+    );
+
+    Response::success($results);
 });
 
 // GET /api/exam-controller/results/pending
@@ -148,9 +207,12 @@ $router->put('/api/exam-controller/results/{id}', function (array $params) {
         Response::forbidden('Cannot edit published results');
     }
 
-    $mcq = $data['mcq'] ?? $result['mcq'];
-    $cq = $data['cq'] ?? $result['cq'];
-    $practical = $data['practical'] ?? $result['practical'];
+    $partsData = $data['parts_data'] ?? [];
+    $lowerParts = [];
+    foreach ($partsData as $k => $v) $lowerParts[strtolower($k)] = $v;
+    $mcq = (float) ($lowerParts['mcq'] ?? $data['mcq'] ?? $result['mcq']);
+    $cq = (float) ($lowerParts['cq'] ?? $data['cq'] ?? $result['cq']);
+    $practical = (float) ($lowerParts['practical'] ?? $data['practical'] ?? $result['practical']);
     $total = $mcq + $cq + $practical;
     $grade = calculateGradeFromTotal($total);
 
@@ -158,6 +220,7 @@ $router->put('/api/exam-controller/results/{id}', function (array $params) {
         'mcq' => $mcq,
         'cq' => $cq,
         'practical' => $practical,
+        'total' => $total,
         'grade' => $grade['grade'],
         'gpa' => $grade['points'],
     ], 'id = ?', ['id' => $params['id']]);

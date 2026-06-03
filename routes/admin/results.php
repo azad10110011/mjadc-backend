@@ -47,6 +47,19 @@ $router->get('/api/admin/results/upload-data', function () {
         Response::validationError(['year, class, exam_name, subject are required']);
     }
 
+    // Get subject part configs
+    $partConfigs = Database::fetchAll(
+        "SELECT part_name, full_mark, pass_mark, sort_order FROM subject_parts WHERE subject = ? ORDER BY sort_order",
+        [$subject]
+    );
+    if (empty($partConfigs)) {
+        $partConfigs = [
+            ['part_name' => 'mcq', 'full_mark' => 50, 'pass_mark' => 8, 'sort_order' => 1],
+            ['part_name' => 'cq', 'full_mark' => 50, 'pass_mark' => 17, 'sort_order' => 2],
+            ['part_name' => 'practical', 'full_mark' => 50, 'pass_mark' => 8, 'sort_order' => 3],
+        ];
+    }
+
     // Get or create exam
     $exam = Database::fetch(
         "SELECT id FROM exams WHERE year = ? AND class = ? AND exam_name = ?",
@@ -55,7 +68,7 @@ $router->get('/api/admin/results/upload-data', function () {
     $examId = $exam ? $exam['id'] : null;
 
     // Get all students in the class with their existing marks for this exam+subject
-    $students = Database::fetchAll(
+    $rows = Database::fetchAll(
         "SELECT s.id, s.student_id, s.name,
                 er.mcq, er.cq, er.practical, er.total, er.grade, er.gpa, er.status,
                 er.id as result_id
@@ -67,7 +80,40 @@ $router->get('/api/admin/results/upload-data', function () {
         [$examId, $subject, $class]
     );
 
-    Response::success($students);
+    $students = [];
+    foreach ($rows as $row) {
+        $partsData = [];
+        $absentIn = [];
+        if ($row['result_id']) {
+            foreach ($partConfigs as $p) {
+                $col = strtolower($p['part_name']);
+                $val = $row[$col] ?? 0;
+                $partsData[$p['part_name']] = (float) $val;
+                if ((float) $val === 0.0 && ($row['grade'] === 'Absent' || $row['grade'] === '')) {
+                    $absentIn[] = $p['part_name'];
+                }
+            }
+        }
+        $students[] = [
+            'student_id' => $row['student_id'],
+            'name' => $row['name'],
+            'result_id' => $row['result_id'],
+            'status' => $row['status'],
+            'parts_data' => $partsData,
+            'absent_in' => $absentIn,
+            'mcq' => $row['mcq'],
+            'cq' => $row['cq'],
+            'practical' => $row['practical'],
+            'total' => $row['total'],
+            'grade' => $row['grade'],
+            'gpa' => $row['gpa'],
+        ];
+    }
+
+    Response::success([
+        'part_configs' => $partConfigs,
+        'students' => $students,
+    ]);
 });
 
 // POST /api/admin/results/upload
@@ -113,7 +159,13 @@ $router->post('/api/admin/results/upload', function () {
         );
         if (!$student) continue;
 
-        $total = ($mark['mcq'] ?? 0) + ($mark['cq'] ?? 0) + ($mark['practical'] ?? 0);
+        $partsData = $mark['parts_data'] ?? [];
+        $lowerParts = [];
+        foreach ($partsData as $k => $v) $lowerParts[strtolower($k)] = $v;
+        $mcq = (float) ($lowerParts['mcq'] ?? $mark['mcq'] ?? 0);
+        $cq = (float) ($lowerParts['cq'] ?? $mark['cq'] ?? 0);
+        $practical = (float) ($lowerParts['practical'] ?? $mark['practical'] ?? 0);
+        $total = $mcq + $cq + $practical;
         $grade = calculateGradeFromTotal($total);
 
         // Upsert
@@ -124,9 +176,10 @@ $router->post('/api/admin/results/upload', function () {
 
         if ($existing) {
             Database::update('exam_results', [
-                'mcq' => $mark['mcq'] ?? 0,
-                'cq' => $mark['cq'] ?? 0,
-                'practical' => $mark['practical'] ?? 0,
+                'mcq' => $mcq,
+                'cq' => $cq,
+                'practical' => $practical,
+                'total' => $total,
                 'grade' => $grade['grade'],
                 'gpa' => $grade['points'],
             ], 'id = ?', ['id' => $existing['id']]);
@@ -135,9 +188,10 @@ $router->post('/api/admin/results/upload', function () {
                 'student_id' => $student['id'],
                 'exam_id' => $examId,
                 'subject' => $data['subject'],
-                'mcq' => $mark['mcq'] ?? 0,
-                'cq' => $mark['cq'] ?? 0,
-                'practical' => $mark['practical'] ?? 0,
+                'mcq' => $mcq,
+                'cq' => $cq,
+                'practical' => $practical,
+                'total' => $total,
                 'grade' => $grade['grade'],
                 'gpa' => $grade['points'],
                 'status' => 'draft',

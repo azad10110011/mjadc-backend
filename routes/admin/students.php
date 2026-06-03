@@ -88,6 +88,7 @@ $router->post('/api/admin/students', function () {
         'student_group' => $data['student_group'] ?? null,
         'compulsory_subjects' => isset($data['compulsory_subjects']) ? json_encode($data['compulsory_subjects']) : null,
         'selective_subjects' => isset($data['selective_subjects']) ? json_encode($data['selective_subjects']) : null,
+        'optional_subject' => $data['optional_subject'] ?? null,
         'photo_path' => $data['photo_path'] ?? null,
         'sort_order' => $maxSort['next'],
     ]);
@@ -130,6 +131,9 @@ $router->post('/api/admin/students/{id}', function (array $params) {
     }
     if (isset($data['selective_subjects'])) {
         $updateData['selective_subjects'] = is_array($data['selective_subjects']) ? json_encode($data['selective_subjects']) : $data['selective_subjects'];
+    }
+    if (isset($data['optional_subject'])) {
+        $updateData['optional_subject'] = $data['optional_subject'];
     }
     if (isset($data['present_address'])) {
         $updateData['present_address'] = $data['present_address'];
@@ -182,6 +186,9 @@ $router->put('/api/admin/students/{id}', function (array $params) {
     if (isset($data['selective_subjects'])) {
         $updateData['selective_subjects'] = is_array($data['selective_subjects']) ? json_encode($data['selective_subjects']) : $data['selective_subjects'];
     }
+    if (isset($data['optional_subject'])) {
+        $updateData['optional_subject'] = $data['optional_subject'];
+    }
     if (isset($data['present_address'])) {
         $updateData['present_address'] = $data['present_address'];
         $updateData['address'] = $data['present_address'];
@@ -201,10 +208,34 @@ $router->put('/api/admin/students/{id}', function (array $params) {
 $router->delete('/api/admin/students/{id}', function (array $params) {
     Auth::requireRole('admin');
     $student = Database::fetch("SELECT user_id FROM students WHERE id = ?", [$params['id']]);
+    $studentId = $params['id'];
+
+    // Delete related records first to avoid FK constraints
+    Database::delete('exam_results', 'student_id = ?', [$studentId]);
+    Database::delete('tuition_fees', 'student_id = ?', [$studentId]);
+    Database::delete('payments', 'student_id = ?', [$studentId]);
+
+    // Delete user account (clean up all FK references first)
     if ($student && $student['user_id']) {
-        Database::delete('users', 'id = ?', [$student['user_id']]);
+        $uid = $student['user_id'];
+        Database::query("UPDATE exam_results SET uploaded_by = NULL WHERE uploaded_by = ?", [$uid]);
+        Database::query("UPDATE exam_results SET approved_by = NULL WHERE approved_by = ?", [$uid]);
+        Database::query("UPDATE leave_applications SET reviewed_by = NULL WHERE reviewed_by = ?", [$uid]);
+        Database::query("UPDATE syllabus SET uploaded_by = NULL WHERE uploaded_by = ?", [$uid]);
+        Database::query("UPDATE routines SET uploaded_by = NULL WHERE uploaded_by = ?", [$uid]);
+        Database::query("UPDATE downloadable_forms SET uploaded_by = NULL WHERE uploaded_by = ?", [$uid]);
+        Database::query("UPDATE gallery SET uploaded_by = NULL WHERE uploaded_by = ?", [$uid]);
+        Database::query("UPDATE events SET created_by = NULL WHERE created_by = ?", [$uid]);
+        Database::query("UPDATE site_settings SET updated_by = NULL WHERE updated_by = ?", [$uid]);
+        Database::query("UPDATE page_content SET updated_by = NULL WHERE updated_by = ?", [$uid]);
+        Database::query("UPDATE notifications SET user_id = NULL WHERE user_id = ?", [$uid]);
+        Database::delete('leave_applications', 'applicant_id = ?', [$uid]);
+        Database::delete('leave_taken', 'user_id = ?', [$uid]);
+        Database::query("UPDATE notices SET created_by = 1 WHERE created_by = ?", [$uid]);
+        Database::delete('users', 'id = ?', [$uid]);
     }
-    Database::delete('students', 'id = ?', [$params['id']]);
+
+    Database::delete('students', 'id = ?', [$studentId]);
     Response::success(null, 'Student deleted');
 });
 

@@ -22,6 +22,7 @@ $router->post('/api/principal/staff', function () {
         'password_hash' => Auth::hashPassword('password123'),
         'gender' => $data['gender'],
         'date_of_birth' => $data['date_of_birth'] ?? null,
+        'default_role' => $data['default_role'] ?? null,
     ]);
 
     $role = $data['role'] ?? 'administration';

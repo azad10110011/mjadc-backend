@@ -25,6 +25,7 @@ $router->post('/api/principal/teachers', function () {
         'password_hash' => $tempPassword,
         'gender' => $data['gender'],
         'date_of_birth' => $data['date_of_birth'] ?? null,
+        'default_role' => $data['default_role'] ?? null,
     ]);
 
     // Assign roles

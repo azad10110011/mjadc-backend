@@ -7,6 +7,17 @@ $router->get('/api/admin/teachers-staff/teachers', function () {
     $now = new DateTime();
     foreach ($teachers as &$t) {
         $t['experience'] = $t['first_mpo_date'] ? $now->diff(new DateTime($t['first_mpo_date']))->format('%y years, %m months, %d days') : null;
+        // Include subjects from teacher_subjects table
+        $rows = Database::fetchAll("SELECT subject, type FROM teacher_subjects WHERE teacher_id = ?", [$t['id']]);
+        $t['subjects'] = [];
+        $t['result_subjects'] = [];
+        foreach ($rows as $r) {
+            if ($r['type'] === 'result') {
+                $t['result_subjects'][] = $r['subject'];
+            } else {
+                $t['subjects'][] = $r['subject'];
+            }
+        }
     }
     Response::success($teachers);
 });
@@ -44,6 +55,7 @@ $router->post('/api/admin/teachers-staff/teacher', function () {
             'password_hash' => Auth::hashPassword($data['password'] ?? 'password123'),
             'gender' => $data['gender'],
             'date_of_birth' => $data['date_of_birth'] ?? null,
+            'default_role' => $data['default_role'] ?? null,
         ]);
 
         $roles = $data['roles'] ?? ['teacher'];
@@ -68,6 +80,18 @@ $router->post('/api/admin/teachers-staff/teacher', function () {
             'permanent_address' => $data['permanent_address'] ?? null,
         ]);
 
+        // Sync to teacher_subjects (single subject dropdown + multi-subject support)
+        if ($data['subject'] ?? null) {
+            Database::delete('teacher_subjects', 'teacher_id = ? AND type = ?', [$teacherId, 'public']);
+            Database::insert('teacher_subjects', ['teacher_id' => $teacherId, 'subject' => $data['subject'], 'type' => 'public']);
+        }
+        if (isset($data['subjects']) && is_array($data['subjects'])) {
+            Database::delete('teacher_subjects', 'teacher_id = ? AND type = ?', [$teacherId, 'public']);
+            foreach ($data['subjects'] as $sub) {
+                Database::insert('teacher_subjects', ['teacher_id' => $teacherId, 'subject' => $sub, 'type' => 'public']);
+            }
+        }
+
         Response::created(['id' => $teacherId], 'Teacher added');
     } catch (\Throwable $e) {
         Response::error('Internal server error: ' . $e->getMessage(), 500);
@@ -86,35 +110,57 @@ $router->put('/api/admin/teachers-staff/teacher/{id}', function (array $params) 
         if (!empty($updateData)) {
             Database::update('teachers', $updateData, 'id = ?', ['id' => $params['id']]);
         }
-        if (isset($data['date_of_birth'])) {
-            $teacher = Database::fetch("SELECT * FROM teachers WHERE id = ?", [$params['id']]);
-            if ($teacher) {
-                $userId = $teacher['user_id'];
-                if ($userId) {
-                    $userExists = Database::fetch("SELECT id FROM users WHERE id = ?", [$userId]);
-                    if (!$userExists) $userId = null;
-                }
-                if (!$userId) {
-                    $email = $data['email'] ?? $teacher['email'] ?? ('teacher_' . $params['id'] . '@mjadc.ac.bd');
-                    $existingUser = Database::fetch("SELECT id FROM users WHERE email = ?", [$email]);
-                    if ($existingUser) {
-                        $userId = $existingUser['id'];
-                        Database::update('users', ['date_of_birth' => $data['date_of_birth']], 'id = ?', ['id' => $userId]);
-                    } else {
-                        $userId = Database::insert('users', [
-                            'name' => $data['name'] ?? $teacher['name'],
-                            'email' => $email,
-                            'password_hash' => Auth::hashPassword('password123'),
-                            'gender' => $data['gender'] ?? $teacher['gender'],
-                            'date_of_birth' => $data['date_of_birth'],
-                        ]);
-                    }
-                    Database::update('teachers', ['user_id' => $userId], 'id = ?', ['id' => $params['id']]);
+
+        // Handle user account (date_of_birth + password + role)
+        $teacher = Database::fetch("SELECT * FROM teachers WHERE id = ?", [$params['id']]);
+        if ($teacher && (isset($data['date_of_birth']) || isset($data['password']) || isset($data['roles']))) {
+            $userId = $teacher['user_id'];
+            if ($userId) {
+                $userExists = Database::fetch("SELECT id FROM users WHERE id = ?", [$userId]);
+                if (!$userExists) $userId = null;
+            }
+            if (!$userId) {
+                $email = $data['email'] ?? $teacher['email'] ?? ('teacher_' . $params['id'] . '@mjadc.ac.bd');
+                $existingUser = Database::fetch("SELECT id FROM users WHERE email = ?", [$email]);
+                if ($existingUser) {
+                    $userId = $existingUser['id'];
                 } else {
-                    Database::update('users', ['date_of_birth' => $data['date_of_birth']], 'id = ?', ['id' => $userId]);
+                    $userId = Database::insert('users', [
+                        'name' => $data['name'] ?? $teacher['name'],
+                        'email' => $email,
+                        'password_hash' => Auth::hashPassword($data['password'] ?? 'password123'),
+                        'gender' => $data['gender'] ?? $teacher['gender'],
+                        'date_of_birth' => $data['date_of_birth'] ?? null,
+                    ]);
+                }
+                Database::update('teachers', ['user_id' => $userId], 'id = ?', ['id' => $params['id']]);
+            }
+            $userUpdate = [];
+            if (isset($data['date_of_birth'])) $userUpdate['date_of_birth'] = $data['date_of_birth'];
+            if (isset($data['password'])) $userUpdate['password_hash'] = Auth::hashPassword($data['password']);
+            if (array_key_exists('default_role', $data)) $userUpdate['default_role'] = $data['default_role'];
+            if (!empty($userUpdate)) Database::update('users', $userUpdate, 'id = ?', ['id' => $userId]);
+
+            if (isset($data['roles']) && is_array($data['roles'])) {
+                Database::delete('user_roles', 'user_id = ?', [$userId]);
+                foreach ($data['roles'] as $role) {
+                    Database::insert('user_roles', ['user_id' => $userId, 'role' => $role]);
                 }
             }
         }
+
+        // Sync to teacher_subjects
+        if (isset($data['subject']) || isset($data['subjects'])) {
+            Database::delete('teacher_subjects', 'teacher_id = ? AND type = ?', [$params['id'], 'public']);
+            if (isset($data['subjects']) && is_array($data['subjects'])) {
+                foreach ($data['subjects'] as $sub) {
+                    Database::insert('teacher_subjects', ['teacher_id' => $params['id'], 'subject' => $sub, 'type' => 'public']);
+                }
+            } elseif ($data['subject'] ?? null) {
+                Database::insert('teacher_subjects', ['teacher_id' => $params['id'], 'subject' => $data['subject'], 'type' => 'public']);
+            }
+        }
+
         Response::success(null, 'Teacher updated');
     } catch (\Throwable $e) {
         Response::error('Internal server error: ' . $e->getMessage(), 500);
@@ -124,6 +170,28 @@ $router->put('/api/admin/teachers-staff/teacher/{id}', function (array $params) 
 // DELETE /api/admin/teachers-staff/teacher/{id}
 $router->delete('/api/admin/teachers-staff/teacher/{id}', function (array $params) {
     Auth::requireRole('admin');
+    $teacher = Database::fetch("SELECT user_id FROM teachers WHERE id = ?", [$params['id']]);
+
+    // Clean up related records before deleting
+    Database::delete('teacher_subjects', 'teacher_id = ?', [$params['id']]);
+    if ($teacher && $teacher['user_id']) {
+        $uid = $teacher['user_id'];
+        Database::query("UPDATE exam_results SET uploaded_by = NULL WHERE uploaded_by = ?", [$uid]);
+        Database::query("UPDATE exam_results SET approved_by = NULL WHERE approved_by = ?", [$uid]);
+        Database::query("UPDATE leave_applications SET reviewed_by = NULL WHERE reviewed_by = ?", [$uid]);
+        Database::query("UPDATE syllabus SET uploaded_by = NULL WHERE uploaded_by = ?", [$uid]);
+        Database::query("UPDATE routines SET uploaded_by = NULL WHERE uploaded_by = ?", [$uid]);
+        Database::query("UPDATE downloadable_forms SET uploaded_by = NULL WHERE uploaded_by = ?", [$uid]);
+        Database::query("UPDATE gallery SET uploaded_by = NULL WHERE uploaded_by = ?", [$uid]);
+        Database::query("UPDATE events SET created_by = NULL WHERE created_by = ?", [$uid]);
+        Database::query("UPDATE site_settings SET updated_by = NULL WHERE updated_by = ?", [$uid]);
+        Database::query("UPDATE page_content SET updated_by = NULL WHERE updated_by = ?", [$uid]);
+        Database::query("UPDATE notifications SET user_id = NULL WHERE user_id = ?", [$uid]);
+        Database::delete('leave_applications', 'applicant_id = ?', [$uid]);
+        Database::delete('leave_taken', 'user_id = ?', [$uid]);
+        Database::query("UPDATE notices SET created_by = 1 WHERE created_by = ?", [$uid]);
+        Database::delete('users', 'id = ?', [$uid]);
+    }
     Database::delete('teachers', 'id = ?', [$params['id']]);
     Response::success(null, 'Teacher deleted');
 });
@@ -146,13 +214,16 @@ $router->post('/api/admin/teachers-staff/staff', function () {
         $userId = Database::insert('users', [
             'name' => $data['name'],
             'email' => $data['email'] ?? ($data['name'] . '@mjadc.ac.bd'),
-            'password_hash' => Auth::hashPassword('password123'),
+            'password_hash' => Auth::hashPassword($data['password'] ?? 'password123'),
             'gender' => $data['gender'],
             'date_of_birth' => $data['date_of_birth'] ?? null,
+            'default_role' => $data['default_role'] ?? null,
         ]);
 
-        $role = $data['role'] ?? 'administration';
-        Database::insert('user_roles', ['user_id' => $userId, 'role' => $role]);
+        $roles = $data['roles'] ?? ['administration'];
+        foreach ($roles as $role) {
+            Database::insert('user_roles', ['user_id' => $userId, 'role' => $role]);
+        }
 
         $maxSort = Database::fetch("SELECT COALESCE(MAX(sort_order), 0) + 1 as next FROM staff");
         $staffId = Database::insert('staff', [
@@ -188,32 +259,41 @@ $router->put('/api/admin/teachers-staff/staff/{id}', function (array $params) {
         if (!empty($updateData)) {
             Database::update('staff', $updateData, 'id = ?', ['id' => $params['id']]);
         }
-        if (isset($data['date_of_birth'])) {
-            $record = Database::fetch("SELECT * FROM staff WHERE id = ?", [$params['id']]);
-            if ($record) {
-                $userId = $record['user_id'];
-                if ($userId) {
-                    $userExists = Database::fetch("SELECT id FROM users WHERE id = ?", [$userId]);
-                    if (!$userExists) $userId = null;
-                }
-                if (!$userId) {
-                    $email = $data['email'] ?? $record['email'] ?? ('staff_' . $params['id'] . '@mjadc.ac.bd');
-                    $existingUser = Database::fetch("SELECT id FROM users WHERE email = ?", [$email]);
-                    if ($existingUser) {
-                        $userId = $existingUser['id'];
-                        Database::update('users', ['date_of_birth' => $data['date_of_birth']], 'id = ?', ['id' => $userId]);
-                    } else {
-                        $userId = Database::insert('users', [
-                            'name' => $data['name'] ?? $record['name'],
-                            'email' => $email,
-                            'password_hash' => Auth::hashPassword('password123'),
-                            'gender' => $data['gender'] ?? $record['gender'],
-                            'date_of_birth' => $data['date_of_birth'],
-                        ]);
-                    }
-                    Database::update('staff', ['user_id' => $userId], 'id = ?', ['id' => $params['id']]);
+
+        // Handle user account (date_of_birth + password + roles)
+        $record = Database::fetch("SELECT * FROM staff WHERE id = ?", [$params['id']]);
+        if ($record && (isset($data['date_of_birth']) || isset($data['password']) || isset($data['roles']))) {
+            $userId = $record['user_id'];
+            if ($userId) {
+                $userExists = Database::fetch("SELECT id FROM users WHERE id = ?", [$userId]);
+                if (!$userExists) $userId = null;
+            }
+            if (!$userId) {
+                $email = $data['email'] ?? $record['email'] ?? ('staff_' . $params['id'] . '@mjadc.ac.bd');
+                $existingUser = Database::fetch("SELECT id FROM users WHERE email = ?", [$email]);
+                if ($existingUser) {
+                    $userId = $existingUser['id'];
                 } else {
-                    Database::update('users', ['date_of_birth' => $data['date_of_birth']], 'id = ?', ['id' => $userId]);
+                    $userId = Database::insert('users', [
+                        'name' => $data['name'] ?? $record['name'],
+                        'email' => $email,
+                        'password_hash' => Auth::hashPassword($data['password'] ?? 'password123'),
+                        'gender' => $data['gender'] ?? $record['gender'],
+                        'date_of_birth' => $data['date_of_birth'] ?? null,
+                    ]);
+                }
+                Database::update('staff', ['user_id' => $userId], 'id = ?', ['id' => $params['id']]);
+            }
+            $userUpdate = [];
+            if (isset($data['date_of_birth'])) $userUpdate['date_of_birth'] = $data['date_of_birth'];
+            if (isset($data['password'])) $userUpdate['password_hash'] = Auth::hashPassword($data['password']);
+            if (array_key_exists('default_role', $data)) $userUpdate['default_role'] = $data['default_role'];
+            if (!empty($userUpdate)) Database::update('users', $userUpdate, 'id = ?', ['id' => $userId]);
+
+            if (isset($data['roles']) && is_array($data['roles'])) {
+                Database::delete('user_roles', 'user_id = ?', [$userId]);
+                foreach ($data['roles'] as $role) {
+                    Database::insert('user_roles', ['user_id' => $userId, 'role' => $role]);
                 }
             }
         }
@@ -226,6 +306,27 @@ $router->put('/api/admin/teachers-staff/staff/{id}', function (array $params) {
 // DELETE /api/admin/teachers-staff/staff/{id}
 $router->delete('/api/admin/teachers-staff/staff/{id}', function (array $params) {
     Auth::requireRole('admin');
+    $record = Database::fetch("SELECT user_id FROM staff WHERE id = ?", [$params['id']]);
+
+    // Clean up related records before deleting
+    if ($record && $record['user_id']) {
+        $uid = $record['user_id'];
+        Database::query("UPDATE exam_results SET uploaded_by = NULL WHERE uploaded_by = ?", [$uid]);
+        Database::query("UPDATE exam_results SET approved_by = NULL WHERE approved_by = ?", [$uid]);
+        Database::query("UPDATE leave_applications SET reviewed_by = NULL WHERE reviewed_by = ?", [$uid]);
+        Database::query("UPDATE syllabus SET uploaded_by = NULL WHERE uploaded_by = ?", [$uid]);
+        Database::query("UPDATE routines SET uploaded_by = NULL WHERE uploaded_by = ?", [$uid]);
+        Database::query("UPDATE downloadable_forms SET uploaded_by = NULL WHERE uploaded_by = ?", [$uid]);
+        Database::query("UPDATE gallery SET uploaded_by = NULL WHERE uploaded_by = ?", [$uid]);
+        Database::query("UPDATE events SET created_by = NULL WHERE created_by = ?", [$uid]);
+        Database::query("UPDATE site_settings SET updated_by = NULL WHERE updated_by = ?", [$uid]);
+        Database::query("UPDATE page_content SET updated_by = NULL WHERE updated_by = ?", [$uid]);
+        Database::query("UPDATE notifications SET user_id = NULL WHERE user_id = ?", [$uid]);
+        Database::delete('leave_applications', 'applicant_id = ?', [$uid]);
+        Database::delete('leave_taken', 'user_id = ?', [$uid]);
+        Database::query("UPDATE notices SET created_by = 1 WHERE created_by = ?", [$uid]);
+        Database::delete('users', 'id = ?', [$uid]);
+    }
     Database::delete('staff', 'id = ?', [$params['id']]);
     Response::success(null, 'Staff deleted');
 });

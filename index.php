@@ -106,6 +106,7 @@ require __DIR__ . '/routes/admin/academic-approvals.php';
 require __DIR__ . '/routes/admin/achievements.php';
 require __DIR__ . '/routes/admin/gallery.php';
 require __DIR__ . '/routes/admin/student-info.php';
+require __DIR__ . '/routes/admin/transcript.php';
 
 // Dispatch
 $router->dispatch();

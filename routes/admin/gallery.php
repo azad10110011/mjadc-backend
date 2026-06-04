@@ -54,6 +54,22 @@ $router->post('/api/admin/gallery', function () {
     Response::created(['images' => $uploaded], count($uploaded) . ' image(s) uploaded');
 }, [$adminMw]);
 
+// PUT /api/admin/gallery/{id}
+$router->put('/api/admin/gallery/{id}', function (array $params) {
+    Auth::requireRole('admin');
+    $data = json_decode(file_get_contents('php://input'), true);
+
+    $updateData = [];
+    foreach (['caption', 'event_name'] as $field) {
+        if (isset($data[$field])) $updateData[$field] = $data[$field];
+    }
+
+    if (!empty($updateData)) {
+        Database::update('gallery', $updateData, 'id = ?', ['id' => $params['id']]);
+    }
+    Response::success(null, 'Image updated');
+}, [$adminMw]);
+
 // DELETE /api/admin/gallery/{id}
 $router->delete('/api/admin/gallery/{id}', function (array $params) {
     Auth::requireRole('admin');

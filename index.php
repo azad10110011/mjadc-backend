@@ -98,6 +98,8 @@ require __DIR__ . '/routes/admin/leave.php';
 require __DIR__ . '/routes/admin/contact.php';
 require __DIR__ . '/routes/admin/settings.php';
 require __DIR__ . '/routes/admin/governing-body.php'; // GET/POST/PUT/DELETE /api/admin/governing-body
+require __DIR__ . '/routes/admin/teachers-council.php'; // GET/POST/PUT/DELETE /api/admin/teachers-council
+require __DIR__ . '/routes/admin/career-club.php'; // GET/POST/PUT/DELETE /api/admin/career-club
 require __DIR__ . '/routes/admin/co-curricular.php'; // GET/POST/PUT/DELETE /api/admin/co-curricular/{club}
 require __DIR__ . '/routes/admin/subjects.php';
 require __DIR__ . '/routes/admin/students.php';

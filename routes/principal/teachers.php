@@ -53,6 +53,8 @@ $router->post('/api/principal/teachers', function () {
         'whatsapp_number' => $data['whatsapp_number'] ?? null,
         'present_address' => $data['present_address'] ?? null,
         'permanent_address' => $data['permanent_address'] ?? null,
+        'pds_id' => $data['pds_id'] ?? null,
+        'mpo_index' => $data['mpo_index'] ?? null,
     ]);
 
     Response::created(['id' => $teacherId, 'user_id' => $userId], 'Teacher added successfully');
@@ -63,7 +65,7 @@ $router->get('/api/principal/teachers', function () {
     Auth::requireRole('principal');
 
     $teachers = Database::fetchAll(
-        "SELECT t.id, t.name, t.name_bangla, t.name_english, t.designation, t.subject, t.`group`, t.joining_date, t.first_mpo_date, t.nid_number, t.mobile, t.whatsapp_number, t.email, t.photo_path, t.present_address, t.permanent_address, u.date_of_birth
+        "SELECT t.id, t.name, t.name_bangla, t.name_english, t.designation, t.subject, t.`group`, t.joining_date, t.first_mpo_date, t.nid_number, t.mobile, t.whatsapp_number, t.email, t.photo_path, t.present_address, t.permanent_address, u.date_of_birth, t.pds_id, t.mpo_index
          FROM teachers t LEFT JOIN users u ON t.user_id = u.id ORDER BY t.name"
     );
     Response::success($teachers);

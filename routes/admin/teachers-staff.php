@@ -3,7 +3,7 @@
 // GET /api/admin/teachers-staff/teachers
 $router->get('/api/admin/teachers-staff/teachers', function () {
     Auth::requireRole('admin');
-    $teachers = Database::fetchAll("SELECT t.id, t.name, t.name_bangla, t.name_english, t.designation, t.subject, t.`group`, t.email, t.mobile, t.whatsapp_number, t.photo_path, t.joining_date, t.first_mpo_date, t.nid_number, t.present_address, t.permanent_address, t.gender, u.date_of_birth FROM teachers t LEFT JOIN users u ON t.user_id = u.id ORDER BY t.sort_order, t.name");
+    $teachers = Database::fetchAll("SELECT t.id, t.name, t.name_bangla, t.name_english, t.designation, t.subject, t.`group`, t.email, t.mobile, t.whatsapp_number, t.photo_path, t.joining_date, t.first_mpo_date, t.nid_number, t.present_address, t.permanent_address, t.gender, t.pds_id, t.mpo_index, u.date_of_birth FROM teachers t LEFT JOIN users u ON t.user_id = u.id ORDER BY t.sort_order, t.name");
     $now = new DateTime();
     foreach ($teachers as &$t) {
         $t['experience'] = $t['first_mpo_date'] ? $now->diff(new DateTime($t['first_mpo_date']))->format('%y years, %m months, %d days') : null;
@@ -25,7 +25,7 @@ $router->get('/api/admin/teachers-staff/teachers', function () {
 // GET /api/admin/teachers-staff/staff
 $router->get('/api/admin/teachers-staff/staff', function () {
     Auth::requireRole('admin');
-    $staff = Database::fetchAll("SELECT s.id, s.name, s.name_bangla, s.name_english, s.designation, s.subject, s.email, s.mobile, s.whatsapp_number, s.photo_path, s.joining_date, s.first_mpo_date, s.nid_number, s.present_address, s.permanent_address, s.gender, u.date_of_birth FROM staff s LEFT JOIN users u ON s.user_id = u.id ORDER BY s.sort_order, s.name");
+    $staff = Database::fetchAll("SELECT s.id, s.name, s.name_bangla, s.name_english, s.designation, s.subject, s.email, s.mobile, s.whatsapp_number, s.photo_path, s.joining_date, s.first_mpo_date, s.nid_number, s.present_address, s.permanent_address, s.gender, s.pds_id, s.mpo_index, u.date_of_birth FROM staff s LEFT JOIN users u ON s.user_id = u.id ORDER BY s.sort_order, s.name");
     $now = new DateTime();
     foreach ($staff as &$s) {
         $s['experience'] = $s['first_mpo_date'] ? $now->diff(new DateTime($s['first_mpo_date']))->format('%y years, %m months, %d days') : null;
@@ -78,6 +78,8 @@ $router->post('/api/admin/teachers-staff/teacher', function () {
             'whatsapp_number' => $data['whatsapp_number'] ?? null,
             'present_address' => $data['present_address'] ?? null,
             'permanent_address' => $data['permanent_address'] ?? null,
+            'pds_id' => $data['pds_id'] ?? null,
+            'mpo_index' => $data['mpo_index'] ?? null,
         ]);
 
         // Sync to teacher_subjects (single subject dropdown + multi-subject support)
@@ -104,7 +106,7 @@ $router->put('/api/admin/teachers-staff/teacher/{id}', function (array $params) 
         Auth::requireRole('admin');
         $data = json_decode(file_get_contents('php://input'), true);
         $updateData = [];
-        foreach (['name', 'name_bangla', 'name_english', 'designation', 'subject', 'group', 'mobile', 'email', 'joining_date', 'first_mpo_date', 'nid_number', 'whatsapp_number', 'present_address', 'permanent_address', 'gender', 'photo_path'] as $f) {
+        foreach (['name', 'name_bangla', 'name_english', 'designation', 'subject', 'group', 'mobile', 'email', 'joining_date', 'first_mpo_date', 'nid_number', 'whatsapp_number', 'present_address', 'permanent_address', 'gender', 'photo_path', 'pds_id', 'mpo_index'] as $f) {
             if (isset($data[$f])) $updateData[$f] = $data[$f];
         }
         if (!empty($updateData)) {
@@ -239,6 +241,8 @@ $router->post('/api/admin/teachers-staff/staff', function () {
             'whatsapp_number' => $data['whatsapp_number'] ?? null,
             'present_address' => $data['present_address'] ?? null,
             'permanent_address' => $data['permanent_address'] ?? null,
+            'pds_id' => $data['pds_id'] ?? null,
+            'mpo_index' => $data['mpo_index'] ?? null,
         ]);
 
         Response::created(['id' => $staffId], 'Staff added');
@@ -253,7 +257,7 @@ $router->put('/api/admin/teachers-staff/staff/{id}', function (array $params) {
         Auth::requireRole('admin');
         $data = json_decode(file_get_contents('php://input'), true);
         $updateData = [];
-        foreach (['name', 'name_bangla', 'name_english', 'designation', 'subject', 'mobile', 'email', 'joining_date', 'first_mpo_date', 'nid_number', 'whatsapp_number', 'present_address', 'permanent_address', 'gender', 'photo_path'] as $f) {
+        foreach (['name', 'name_bangla', 'name_english', 'designation', 'subject', 'mobile', 'email', 'joining_date', 'first_mpo_date', 'nid_number', 'whatsapp_number', 'present_address', 'permanent_address', 'gender', 'photo_path', 'pds_id', 'mpo_index'] as $f) {
             if (isset($data[$f])) $updateData[$f] = $data[$f];
         }
         if (!empty($updateData)) {

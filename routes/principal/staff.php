@@ -45,6 +45,8 @@ $router->post('/api/principal/staff', function () {
         'whatsapp_number' => $data['whatsapp_number'] ?? null,
         'present_address' => $data['present_address'] ?? null,
         'permanent_address' => $data['permanent_address'] ?? null,
+        'pds_id' => $data['pds_id'] ?? null,
+        'mpo_index' => $data['mpo_index'] ?? null,
     ]);
 
     Response::created(['id' => $staffId], 'Staff added successfully');
@@ -55,7 +57,7 @@ $router->get('/api/principal/staff', function () {
     Auth::requireRole('principal');
 
     $staff = Database::fetchAll(
-        "SELECT s.id, s.name, s.name_bangla, s.name_english, s.designation, s.subject, s.joining_date, s.first_mpo_date, s.nid_number, s.mobile, s.whatsapp_number, s.email, s.photo_path, s.present_address, s.permanent_address, u.date_of_birth
+        "SELECT s.id, s.name, s.name_bangla, s.name_english, s.designation, s.subject, s.joining_date, s.first_mpo_date, s.nid_number, s.mobile, s.whatsapp_number, s.email, s.photo_path, s.present_address, s.permanent_address, u.date_of_birth, s.pds_id, s.mpo_index
          FROM staff s LEFT JOIN users u ON s.user_id = u.id ORDER BY s.name"
     );
     Response::success($staff);

@@ -71,6 +71,8 @@ CREATE TABLE teachers (
     email VARCHAR(100),
     photo_path VARCHAR(255),
     sort_order INT DEFAULT 0,
+    pds_id VARCHAR(50) DEFAULT NULL,
+    mpo_index VARCHAR(50) DEFAULT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 
 -- Staff
@@ -86,6 +88,8 @@ CREATE TABLE staff (
     email VARCHAR(100),
     photo_path VARCHAR(255),
     sort_order INT DEFAULT 0,
+    pds_id VARCHAR(50) DEFAULT NULL,
+    mpo_index VARCHAR(50) DEFAULT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL

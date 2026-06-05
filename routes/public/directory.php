@@ -12,8 +12,17 @@ $router->get('/api/governing-body', function () {
 // GET /api/teachers-council
 $router->get('/api/teachers-council', function () {
     $members = Database::fetchAll(
-        "SELECT id, name, designation, COALESCE(position, '') as position, photo_path 
-         FROM teachers ORDER BY sort_order"
+        "SELECT id, name, designation, COALESCE(position, '') as position, COALESCE(mobile, '') as mobile, photo_path 
+         FROM teachers_council ORDER BY sort_order"
+    );
+    Response::success($members);
+});
+
+// GET /api/career-club
+$router->get('/api/career-club', function () {
+    $members = Database::fetchAll(
+        "SELECT id, name, designation, COALESCE(position, '') as position, COALESCE(mobile, '') as mobile, photo_path 
+         FROM career_club ORDER BY sort_order"
     );
     Response::success($members);
 });
@@ -38,10 +47,14 @@ $router->get('/api/staff-list', function () {
 
 // GET /api/co-curricular/{club}
 $router->get('/api/co-curricular/{club}', function (array $params) {
+    $clubMap = ['bncc' => 'BNCC', 'rover-scout' => 'Rover Scout', 'science-club' => 'Science Club', 'debating-club' => 'Debating Club'];
+    $club = $clubMap[$params['club']] ?? null;
+    if (!$club) Response::notFound('Club not found');
+
     $members = Database::fetchAll(
         "SELECT id, club, name, designation, mobile, photo_path 
          FROM co_curricular WHERE club = ? ORDER BY sort_order",
-        [$params['club']]
+        [$club]
     );
     Response::success($members);
 });

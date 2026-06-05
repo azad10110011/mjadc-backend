@@ -6,7 +6,7 @@ $adminMw = function () { Auth::requireRole('admin'); };
 $router->get('/api/admin/career-club', function () {
     Auth::requireRole('admin');
     $members = Database::fetchAll(
-        "SELECT id, name, designation, COALESCE(position, '') as position, photo_path, sort_order
+        "SELECT id, name, designation, COALESCE(position, '') as position, COALESCE(mobile, '') as mobile, photo_path, sort_order
          FROM career_club ORDER BY sort_order"
     );
     Response::success($members);
@@ -26,6 +26,7 @@ $router->post('/api/admin/career-club', function () {
         'name' => $data['name'],
         'designation' => $data['designation'],
         'position' => $data['position'] ?? null,
+        'mobile' => $data['mobile'] ?? null,
         'photo_path' => $data['photo_path'] ?? null,
         'sort_order' => $maxSort['next'],
     ]);
@@ -39,7 +40,7 @@ $router->put('/api/admin/career-club/{id}', function (array $params) {
     $data = json_decode(file_get_contents('php://input'), true);
 
     $updateData = [];
-    foreach (['name', 'designation', 'position', 'photo_path'] as $field) {
+    foreach (['name', 'designation', 'position', 'mobile', 'photo_path'] as $field) {
         if (isset($data[$field])) $updateData[$field] = $data[$field];
     }
 

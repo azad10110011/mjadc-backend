@@ -1,0 +1,2 @@
+ALTER TABLE teachers_council ADD COLUMN mobile VARCHAR(15) DEFAULT NULL AFTER position;
+ALTER TABLE career_club ADD COLUMN mobile VARCHAR(15) DEFAULT NULL AFTER position;

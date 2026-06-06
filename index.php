@@ -1,7 +1,36 @@
 <?php
 
+$requestUri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
+
+// Serve upload files directly (bypass for when .htaccess rewrite fails on some hosts)
+$basePath = dirname($_SERVER['SCRIPT_NAME']); // e.g., /mjadc-api
+$relativePath = $requestUri;
+if ($basePath !== '/' && strpos($requestUri, $basePath) === 0) {
+    $relativePath = substr($requestUri, strlen($basePath));
+}
+$relativePath = '/' . trim($relativePath, '/');
+$relativePath = ltrim($relativePath, '/');
+
+if (strpos($relativePath, 'uploads/') === 0) {
+    $filePath = __DIR__ . '/' . $relativePath;
+    if (file_exists($filePath) && !is_dir($filePath)) {
+        $ext = strtolower(pathinfo($filePath, PATHINFO_EXTENSION));
+        $mimeTypes = [
+            'jpg' => 'image/jpeg', 'jpeg' => 'image/jpeg',
+            'png' => 'image/png', 'gif' => 'image/gif',
+            'webp' => 'image/webp', 'pdf' => 'application/pdf',
+        ];
+        $mime = $mimeTypes[$ext] ?? 'application/octet-stream';
+        header('Content-Type: ' . $mime);
+        header('Content-Length: ' . filesize($filePath));
+        header('Cache-Control: public, max-age=31536000');
+        readfile($filePath);
+        exit;
+    }
+}
+
 // Serve static files directly (for PHP built-in server)
-$uri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
+$uri = $requestUri;
 $staticFile = __DIR__ . $uri;
 if ($uri !== '/' && file_exists($staticFile) && !is_dir($staticFile)) {
     return false;
@@ -50,6 +79,7 @@ require __DIR__ . '/routes/public/principals.php';
 require __DIR__ . '/routes/public/academic-approvals.php';
 require __DIR__ . '/routes/public/achievements.php';
 require __DIR__ . '/routes/public/student-info.php';
+require __DIR__ . '/routes/public/media.php';
 
 // ============= STUDENT ROUTES =============
 require __DIR__ . '/routes/student/dashboard.php';

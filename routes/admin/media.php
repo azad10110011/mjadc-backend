@@ -54,6 +54,51 @@ $router->post('/api/admin/media/upload', function () {
     $destPath = __DIR__ . "/../../uploads/{$directory}/{$filename}";
     move_uploaded_file($file['tmp_name'], $destPath);
 
+    // Auto-compress images for smaller file sizes (helps mobile loading)
+    $imageExts = ['jpg', 'jpeg', 'png', 'gif'];
+    if (in_array($ext, $imageExts) && extension_loaded('gd')) {
+        $maxDim = 1920;
+        $quality = 80;
+        list($width, $height) = getimagesize($destPath);
+        if ($width > $maxDim || $height > $maxDim) {
+            $ratio = min($maxDim / $width, $maxDim / $height);
+            $newW = (int)round($width * $ratio);
+            $newH = (int)round($height * $ratio);
+            $srcImg = null;
+            if ($ext === 'png') {
+                $srcImg = imagecreatefrompng($destPath);
+            } elseif ($ext === 'gif') {
+                $srcImg = imagecreatefromgif($destPath);
+            } else {
+                $srcImg = imagecreatefromjpeg($destPath);
+            }
+            if ($srcImg) {
+                $dstImg = imagecreatetruecolor($newW, $newH);
+                if ($ext === 'png' || $ext === 'gif') {
+                    imagealphablending($dstImg, false);
+                    imagesavealpha($dstImg, true);
+                }
+                imagecopyresampled($dstImg, $srcImg, 0, 0, 0, 0, $newW, $newH, $width, $height);
+                if ($ext === 'png') {
+                    imagepng($dstImg, $destPath, 6);
+                } elseif ($ext === 'gif') {
+                    imagegif($dstImg, $destPath);
+                } else {
+                    imagejpeg($dstImg, $destPath, $quality);
+                }
+                imagedestroy($dstImg);
+                imagedestroy($srcImg);
+            }
+        } elseif ($ext === 'jpg' || $ext === 'jpeg') {
+            // Re-compress even if not resized
+            $srcImg = imagecreatefromjpeg($destPath);
+            if ($srcImg) {
+                imagejpeg($srcImg, $destPath, $quality);
+                imagedestroy($srcImg);
+            }
+        }
+    }
+
     if ($directory === 'gallery') {
         Database::insert('gallery', [
             'caption' => $_POST['caption'] ?? '',

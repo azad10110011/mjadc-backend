@@ -33,7 +33,7 @@ CREATE TABLE students (
     name VARCHAR(100) NOT NULL,
     father_name VARCHAR(100),
     mother_name VARCHAR(100),
-    class ENUM('11th', '12th') NOT NULL,
+    class VARCHAR(50) NOT NULL DEFAULT '11th',
     section VARCHAR(10),
     joining_year YEAR NOT NULL,
     academic_session VARCHAR(20) DEFAULT NULL,
@@ -65,7 +65,7 @@ CREATE TABLE teachers (
     gender ENUM('male', 'female') NOT NULL,
     designation VARCHAR(50) NOT NULL,
     subject VARCHAR(50),
-    `group` ENUM('Science', 'Business Studies', 'Humanities', 'General', 'BMT') DEFAULT NULL,
+    `group` VARCHAR(50) DEFAULT NULL,
     joining_date DATE NOT NULL,
     mobile VARCHAR(15),
     email VARCHAR(100),
@@ -431,8 +431,9 @@ CREATE TABLE subjects (
     name VARCHAR(100) NOT NULL,
     code VARCHAR(20) DEFAULT NULL,
     type ENUM('public', 'result', 'both') DEFAULT 'public',
-    `group` ENUM('Science', 'Business Studies', 'Humanities', 'General', 'BMT') DEFAULT 'General',
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    `group` VARCHAR(50) DEFAULT 'General',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY unique_name_group (name, `group`)
 ) ENGINE=InnoDB;
 
 -- Subject papers (result papers under each subject)

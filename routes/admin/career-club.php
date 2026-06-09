@@ -90,3 +90,15 @@ $router->post('/api/admin/career-club/{id}/move-down', function (array $params) 
     Database::update('career_club', ['sort_order' => $current['sort_order']], 'id = ?', ['id' => $next['id']]);
     Response::success(null, 'Reordered');
 }, [$adminMw]);
+
+// POST /api/admin/career-club/reorder
+$router->post('/api/admin/career-club/reorder', function () {
+    Auth::requireRole('admin');
+    $data = json_decode(file_get_contents('php://input'), true);
+    $ids = $data['ids'] ?? [];
+    if (!is_array($ids) || empty($ids)) Response::validationError(['ids' => 'ids array required']);
+    foreach ($ids as $i => $id) {
+        Database::update('career_club', ['sort_order' => $i + 1], 'id = ?', ['id' => (int)$id]);
+    }
+    Response::success(null, 'Reordered');
+}, [$adminMw]);

@@ -43,30 +43,37 @@ $router->get('/api/admin/subjects/by-group', function () {
 // POST /api/admin/subjects – create subject or paper
 $router->post('/api/admin/subjects', function () {
     Auth::requireRole('admin');
-    $data = json_decode(file_get_contents('php://input'), true);
-    $name = trim($data['name'] ?? '');
-    if (!$name) Response::validationError(['name' => 'Name is required']);
+    try {
+        $data = json_decode(file_get_contents('php://input'), true);
+        $name = trim($data['name'] ?? '');
+        if (!$name) Response::validationError(['name' => 'Name is required']);
 
-    if (!empty($data['parent_id'])) {
-        // Creating a paper under a subject
-        $insertData = [
-            'parent_id' => (int)$data['parent_id'],
-            'name' => $name,
-        ];
-        if (!empty($data['code'])) $insertData['code'] = $data['code'];
-        $id = Database::insert('subject_papers', $insertData);
-    } else {
-        // Creating a new subject
-        $type = $data['type'] ?? 'public';
-        $insertData = [
-            'name' => $name,
-            'type' => $type,
-        ];
-        if (!empty($data['code'])) $insertData['code'] = $data['code'];
-        if (!empty($data['group'])) $insertData['group'] = $data['group'];
-        $id = Database::insert('subjects', $insertData);
+        if (!empty($data['parent_id'])) {
+            $insertData = [
+                'parent_id' => (int)$data['parent_id'],
+                'name' => $name,
+            ];
+            if (!empty($data['code'])) $insertData['code'] = $data['code'];
+            $id = Database::insert('subject_papers', $insertData);
+        } else {
+            $group = $data['group'] ?? 'General';
+            $existing = Database::fetch("SELECT id FROM subjects WHERE name = ? AND `group` = ?", [$name, $group]);
+            if ($existing) {
+                Response::validationError(['name' => "Subject '{$name}' already exists in {$group} group"]);
+            }
+            $type = $data['type'] ?? 'public';
+            $insertData = [
+                'name' => $name,
+                'type' => $type,
+            ];
+            if (!empty($data['code'])) $insertData['code'] = $data['code'];
+            if (!empty($data['group'])) $insertData['group'] = $data['group'];
+            $id = Database::insert('subjects', $insertData);
+        }
+        Response::created(['id' => $id]);
+    } catch (\Exception $e) {
+        Response::error('Database error: ' . $e->getMessage(), 500);
     }
-    Response::created(['id' => $id]);
 });
 
 // PUT /api/admin/subjects/{id} – rename subject or paper

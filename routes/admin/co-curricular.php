@@ -107,3 +107,20 @@ $router->post('/api/admin/co-curricular/{club}/{id}/move-down', function (array 
     Database::update('co_curricular', ['sort_order' => $current['sort_order']], 'id = ?', ['id' => $next['id']]);
     Response::success(null, 'Reordered');
 }, [$adminMw]);
+
+// POST /api/admin/co-curricular/{club}/reorder – batch reorder members within a club
+$router->post('/api/admin/co-curricular/{club}/reorder', function (array $params) {
+    Auth::requireRole('admin');
+    $clubMap = ['bncc' => 'BNCC', 'rover-scout' => 'Rover Scout', 'science-club' => 'Science Club', 'debating-club' => 'Debating Club'];
+    $club = $clubMap[$params['club']] ?? null;
+    if (!$club) Response::error('Invalid club', 400);
+
+    $data = json_decode(file_get_contents('php://input'), true);
+    $ids = $data['ids'] ?? [];
+    if (!is_array($ids) || empty($ids)) Response::validationError(['ids' => 'ids array required']);
+
+    foreach ($ids as $i => $id) {
+        Database::update('co_curricular', ['sort_order' => $i + 1], 'id = ? AND club = ?', ['id' => (int)$id, 'club' => $club]);
+    }
+    Response::success(null, 'Reordered');
+}, [$adminMw]);

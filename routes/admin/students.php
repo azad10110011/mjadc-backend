@@ -272,3 +272,31 @@ $router->post('/api/admin/students/{id}/move-down', function (array $params) {
     Database::update('students', ['sort_order' => $current['sort_order']], 'id = ?', ['id' => $next['id']]);
     Response::success(null, 'Reordered');
 });
+
+// POST /api/admin/students/reorder – batch reorder students
+$router->post('/api/admin/students/reorder', function () {
+    Auth::requireRole('admin');
+    $data = json_decode(file_get_contents('php://input'), true);
+    $ids = $data['ids'] ?? [];
+    if (!is_array($ids) || empty($ids)) Response::validationError(['ids' => 'ids array required']);
+    foreach ($ids as $i => $id) {
+        Database::update('students', ['sort_order' => $i + 1], 'id = ?', ['id' => (int)$id]);
+    }
+    Response::success(null, 'Reordered');
+});
+
+// POST /api/admin/students/bulk-change-class – change class for all students in a class
+$router->post('/api/admin/students/bulk-change-class', function () {
+    Auth::requireRole('admin');
+    $data = json_decode(file_get_contents('php://input'), true);
+    $fromClass = $data['from_class'] ?? '';
+    $toClass = $data['to_class'] ?? '';
+    if (!$fromClass || !$toClass) Response::validationError(['from_class' => 'from_class and to_class required']);
+    if ($fromClass === $toClass) Response::error('Source and target class are the same', 400);
+
+    $count = Database::fetch("SELECT COUNT(*) as cnt FROM students WHERE class = ?", [$fromClass])['cnt'];
+    if ($count == 0) Response::error('No students found in source class', 400);
+
+    Database::query("UPDATE students SET class = ? WHERE class = ?", [$toClass, $fromClass]);
+    Response::success(['affected' => (int)$count], "Moved $count students from $fromClass to $toClass");
+});

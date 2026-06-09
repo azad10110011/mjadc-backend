@@ -90,3 +90,15 @@ $router->post('/api/admin/governing-body/{id}/move-down', function (array $param
     Database::update('governing_body', ['sort_order' => $current['sort_order']], 'id = ?', ['id' => $next['id']]);
     Response::success(null, 'Reordered');
 }, [$adminMw]);
+
+// POST /api/admin/governing-body/reorder
+$router->post('/api/admin/governing-body/reorder', function () {
+    Auth::requireRole('admin');
+    $data = json_decode(file_get_contents('php://input'), true);
+    $ids = $data['ids'] ?? [];
+    if (!is_array($ids) || empty($ids)) Response::validationError(['ids' => 'ids array required']);
+    foreach ($ids as $i => $id) {
+        Database::update('governing_body', ['sort_order' => $i + 1], 'id = ?', ['id' => (int)$id]);
+    }
+    Response::success(null, 'Reordered');
+}, [$adminMw]);

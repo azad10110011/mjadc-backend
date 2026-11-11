@@ -243,6 +243,20 @@ $router->post('/api/admin/exam-fees/report', function () {
 });
 
 // ---------------------------------------------------------------------------
+// PUT /api/admin/exam-fees/{id} - edit a payment record (admin only)
+$router->put('/api/admin/exam-fees/{id}', function ($params) {
+    Auth::requireRole('admin');
+    $id = (int)$params['id'];
+    $data = json_decode(file_get_contents('php://input'), true);
+    $updates = [];
+    if (isset($data['amount']) && (float)$data['amount'] > 0) $updates['amount'] = (float)$data['amount'];
+    if (isset($data['payment_method']) && in_array($data['payment_method'], ['cash', 'online'])) $updates['payment_method'] = $data['payment_method'];
+    if (isset($data['will_pay_within'])) $updates['will_pay_within'] = trim($data['will_pay_within']) ?: null;
+    if (empty($updates)) Response::validationError(['nothing to update']);
+    Database::update('exam_fees', $updates, 'id = ?', [$id]);
+    Response::success(['updated' => true], 'Payment record updated');
+});
+
 // DELETE /api/admin/exam-fees/by-student/{uid}/{year}/{exam} â€” undo all partials for a student (admin)
 // ---------------------------------------------------------------------------
 $router->delete('/api/admin/exam-fees/by-student/{uid}/{year}/{exam}', function ($uid, $year, $exam) {
@@ -268,6 +282,32 @@ $router->get('/api/admin/exam-fees/amount', function () {
     if (!$examName) Response::validationError(['exam_name is required']);
     $row = Database::fetch("SELECT setting_value FROM site_settings WHERE setting_key = ? LIMIT 1", ['exam_fee_amount_' . strtolower(str_replace(' ', '_', $examName))]);
     Response::success(['exam_name' => $examName, 'amount' => $row ? (float)$row['setting_value'] : 0.0]);
+});
+
+$router->get('/api/admin/exam-fees/amounts', function () {
+    Auth::requireAnyRole(['admin', 'exam_controller', 'administration']);
+    $rows = Database::fetchAll(
+        "SELECT setting_key, setting_value FROM site_settings WHERE setting_key LIKE 'exam_fee_amount_%' ORDER BY setting_key"
+    );
+    $list = [];
+    foreach ($rows as $r) {
+        $name = preg_replace('/^exam_fee_amount_/', '', $r['setting_key']);
+        $name = str_replace('_', ' ', $name);
+        // restore "(class)" suffix formatting from underscore-serialized keys
+        $name = preg_replace('/\s*\((.*)\)$/u', ' ($1)', $name);
+        $name = ucwords($name);
+        $list[] = ['exam_name' => $name, 'amount' => (float)$r['setting_value']];
+    }
+    Response::success($list);
+});
+
+// DELETE /api/admin/exam-fees/amount?exam_name=X — remove a fee amount (admin)
+$router->delete('/api/admin/exam-fees/amount', function () {
+    Auth::requireRole('admin');
+    $examName = trim($_GET['exam_name'] ?? '');
+    if (!$examName) Response::validationError(['exam_name is required']);
+    Database::delete('site_settings', 'setting_key = ?', ['exam_fee_amount_' . strtolower(str_replace(' ', '_', $examName))]);
+    Response::success(['deleted' => true], 'Fee amount removed');
 });
 
 $router->post('/api/admin/exam-fees/amount', function () {

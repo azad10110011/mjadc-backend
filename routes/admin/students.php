@@ -31,6 +31,9 @@ $router->get('/api/admin/students/lookup', function () {
         [$id]
     );
     if (!$s) Response::error('Student not found', 404);
+    // class-based default exam for simplified fee collection
+    $defaults = ['12th' => 'Pre-Test', '11th' => 'Half Yearly'];
+    $s['default_exam'] = $defaults[$s['class']] ?? 'Pre-Test';
     Response::success($s);
 });
 

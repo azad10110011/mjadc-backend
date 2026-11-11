@@ -62,6 +62,7 @@ require __DIR__ . '/routes/auth.php';
 
 // ============= PUBLIC ROUTES =============
 require __DIR__ . '/routes/subjects.php';
+require __DIR__ . '/routes/subjects-with-codes.php'; // GET /api/subjects-with-codes (codes for entry forms)
 require __DIR__ . '/routes/public/notices.php';
 require __DIR__ . '/routes/public/results.php';
 require __DIR__ . '/routes/public/routines.php';
@@ -133,12 +134,23 @@ require __DIR__ . '/routes/admin/career-club.php'; // GET/POST/PUT/DELETE /api/a
 require __DIR__ . '/routes/admin/co-curricular.php'; // GET/POST/PUT/DELETE /api/admin/co-curricular/{club}
 require __DIR__ . '/routes/admin/subjects.php';
 require __DIR__ . '/routes/admin/students.php';
+require __DIR__ . '/routes/admin/exam-subject-config.php';
+require __DIR__ . '/routes/admin/exams.php';
+require __DIR__ . '/routes/admin/exam-papers.php'; // GET/PUT /api/admin/exam-papers
+require __DIR__ . '/routes/admin/custom-fields.php'; // GET/POST/PUT/DELETE /api/admin/custom-fields
 require __DIR__ . '/routes/admin/principals.php';
 require __DIR__ . '/routes/admin/academic-approvals.php';
 require __DIR__ . '/routes/admin/achievements.php';
 require __DIR__ . '/routes/admin/gallery.php';
 require __DIR__ . '/routes/admin/student-info.php';
 require __DIR__ . '/routes/admin/transcript.php';
+require __DIR__ . '/routes/admin/exam-routines.php'; // GET/POST/PUT/DELETE /api/admin/exam-routines
+require __DIR__ . '/routes/admin/admit-card.php';
+require __DIR__ . '/routes/admin/admit-card-config.php';
+require __DIR__ . '/routes/admin/exam-fees.php';
+require __DIR__ . '/routes/public/exam-fee-verify.php';
 
 // Dispatch
 $router->dispatch();
+
+

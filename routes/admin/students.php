@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 
 // GET /api/admin/students
 $router->get('/api/admin/students', function () {
@@ -10,10 +10,49 @@ $router->get('/api/admin/students', function () {
          ORDER BY s.sort_order, s.name"
     );
     foreach ($students as &$s) {
-        $s['compulsory_subjects'] = $s['compulsory_subjects'] ? json_decode($s['compulsory_subjects'], true) : [];
-        $s['selective_subjects'] = $s['selective_subjects'] ? json_decode($s['selective_subjects'], true) : [];
+        // decode; if result is still a JSON string (legacy double-encoded rows), decode again
+        foreach (['compulsory_subjects', 'selective_subjects'] as $col) {
+            $v = $s[$col] ? json_decode($s[$col], true) : [];
+            if (is_string($v)) $v = json_decode($v, true);
+            $s[$col] = is_array($v) ? $v : [];
+        }
     }
     Response::success($students);
+});
+
+// GET /api/admin/students/lookup?id=X - quick lookup (BEFORE {id} to avoid collision)
+$router->get('/api/admin/students/lookup', function () {
+    Auth::requireAnyRole(['admin', 'exam_controller', 'administration']);
+    $id = trim($_GET['id'] ?? '');
+    if (!$id) Response::validationError(['id is required']);
+    $s = Database::fetch(
+        "SELECT s.id, s.user_id, s.student_id, s.name, s.father_name, s.class, s.student_group
+         FROM students s WHERE s.student_id = ? LIMIT 1",
+        [$id]
+    );
+    if (!$s) Response::error('Student not found', 404);
+    Response::success($s);
+});
+
+// GET /api/admin/students/{id} â€” single student (for edit page)
+$router->get('/api/admin/students/{id}', function (array $params) {
+    Auth::requireRole('admin');
+    $student = Database::fetch(
+        "SELECT s.*, u.status as user_status, u.id as user_id
+         FROM students s
+         LEFT JOIN users u ON s.user_id = u.id
+         WHERE s.id = ?",
+        [$params['id']]
+    );
+    if (!$student) {
+        Response::notFound('Student not found');
+    }
+    foreach (['compulsory_subjects', 'selective_subjects'] as $col) {
+        $v = $student[$col] ? json_decode($student[$col], true) : [];
+        if (is_string($v)) $v = json_decode($v, true); // legacy double-encoded
+        $student[$col] = is_array($v) ? $v : [];
+    }
+    Response::success($student);
 });
 
 // POST /api/admin/students
@@ -86,10 +125,16 @@ $router->post('/api/admin/students', function () {
         'present_address' => $data['present_address'] ?? null,
         'permanent_address' => $data['permanent_address'] ?? null,
         'student_group' => $data['student_group'] ?? null,
-        'compulsory_subjects' => isset($data['compulsory_subjects']) ? json_encode($data['compulsory_subjects']) : null,
-        'selective_subjects' => isset($data['selective_subjects']) ? json_encode($data['selective_subjects']) : null,
+        'blood_group' => $data['blood_group'] ?? null,
+        'academic_session' => $data['academic_session'] ?? null,
+        'class_roll' => $data['class_roll'] ?? null,
+        // multipart sends arrays as JSON strings; json_encode would double-encode — decode strings first
+        'compulsory_subjects' => isset($data['compulsory_subjects']) ? json_encode(is_string($data['compulsory_subjects']) ? json_decode($data['compulsory_subjects'], true) : $data['compulsory_subjects']) : null,
+        'selective_subjects' => isset($data['selective_subjects']) ? json_encode(is_string($data['selective_subjects']) ? json_decode($data['selective_subjects'], true) : $data['selective_subjects']) : null,
         'optional_subject' => $data['optional_subject'] ?? null,
         'photo_path' => $data['photo_path'] ?? null,
+        // multipart sends custom_fields as a JSON string; accept both string and array
+        'custom_fields' => isset($data['custom_fields']) ? json_encode(is_string($data['custom_fields']) ? json_decode($data['custom_fields'], true) : $data['custom_fields']) : null,
         'sort_order' => $maxSort['next'],
     ]);
 
@@ -123,7 +168,7 @@ $router->post('/api/admin/students/{id}', function (array $params) {
     $updateData = [];
     foreach (['name', 'father_name', 'mother_name', 'date_of_birth', 'class', 'section',
               'joining_year', 'mobile', 'email', 'gender', 'parent_mobile', 'whatsapp',
-              'student_group', 'photo_path'] as $f) {
+              'student_group', 'academic_session', 'class_roll', 'blood_group', 'photo_path'] as $f) {
         if (isset($data[$f])) $updateData[$f] = $data[$f];
     }
     if (isset($data['compulsory_subjects'])) {
@@ -134,6 +179,11 @@ $router->post('/api/admin/students/{id}', function (array $params) {
     }
     if (isset($data['optional_subject'])) {
         $updateData['optional_subject'] = $data['optional_subject'];
+    }
+    if (isset($data['custom_fields'])) {
+        // multipart sends a JSON string; accept both shapes
+        $cf = is_string($data['custom_fields']) ? json_decode($data['custom_fields'], true) : $data['custom_fields'];
+        if (is_array($cf)) $updateData['custom_fields'] = json_encode($cf);
     }
     if (isset($data['present_address'])) {
         $updateData['present_address'] = $data['present_address'];
@@ -177,7 +227,7 @@ $router->put('/api/admin/students/{id}', function (array $params) {
     $updateData = [];
     foreach (['name', 'father_name', 'mother_name', 'date_of_birth', 'class', 'section',
               'joining_year', 'mobile', 'email', 'gender', 'parent_mobile', 'whatsapp',
-              'student_group', 'photo_path'] as $f) {
+              'student_group', 'academic_session', 'class_roll', 'blood_group', 'photo_path'] as $f) {
         if (isset($data[$f])) $updateData[$f] = $data[$f];
     }
     if (isset($data['compulsory_subjects'])) {
@@ -188,6 +238,11 @@ $router->put('/api/admin/students/{id}', function (array $params) {
     }
     if (isset($data['optional_subject'])) {
         $updateData['optional_subject'] = $data['optional_subject'];
+    }
+    if (isset($data['custom_fields'])) {
+        // multipart sends a JSON string; accept both shapes
+        $cf = is_string($data['custom_fields']) ? json_decode($data['custom_fields'], true) : $data['custom_fields'];
+        if (is_array($cf)) $updateData['custom_fields'] = json_encode($cf);
     }
     if (isset($data['present_address'])) {
         $updateData['present_address'] = $data['present_address'];
@@ -273,7 +328,7 @@ $router->post('/api/admin/students/{id}/move-down', function (array $params) {
     Response::success(null, 'Reordered');
 });
 
-// POST /api/admin/students/reorder – batch reorder students
+// POST /api/admin/students/reorder â€“ batch reorder students
 $router->post('/api/admin/students/reorder', function () {
     Auth::requireRole('admin');
     $data = json_decode(file_get_contents('php://input'), true);
@@ -285,18 +340,31 @@ $router->post('/api/admin/students/reorder', function () {
     Response::success(null, 'Reordered');
 });
 
-// POST /api/admin/students/bulk-change-class – change class for all students in a class
+// POST /api/admin/students/bulk-change-class â€“ change class for selected students, or all students of a class
 $router->post('/api/admin/students/bulk-change-class', function () {
     Auth::requireRole('admin');
     $data = json_decode(file_get_contents('php://input'), true);
-    $fromClass = $data['from_class'] ?? '';
     $toClass = $data['to_class'] ?? '';
-    if (!$fromClass || !$toClass) Response::validationError(['from_class' => 'from_class and to_class required']);
-    if ($fromClass === $toClass) Response::error('Source and target class are the same', 400);
+    $studentIds = $data['student_ids'] ?? null; // array of ids = selected students; null = whole class
+    $fromClass = $data['from_class'] ?? '';
+    if (!$toClass) Response::validationError(['to_class' => 'to_class required']);
 
-    $count = Database::fetch("SELECT COUNT(*) as cnt FROM students WHERE class = ?", [$fromClass])['cnt'];
-    if ($count == 0) Response::error('No students found in source class', 400);
-
-    Database::query("UPDATE students SET class = ? WHERE class = ?", [$toClass, $fromClass]);
-    Response::success(['affected' => (int)$count], "Moved $count students from $fromClass to $toClass");
+    if (is_array($studentIds) && count($studentIds) > 0) {
+        // Selected mode â€” move only the given students
+        $ids = array_map('intval', $studentIds);
+        $placeholders = implode(',', array_fill(0, count($ids), '?'));
+        $affected = Database::query("UPDATE students SET class = ? WHERE id IN ($placeholders)", array_merge([$toClass], $ids));
+        Response::success(['affected' => (int)$affected], "Moved $affected student(s) to $toClass");
+    } else {
+        // Whole-class mode
+        if (!$fromClass) Response::validationError(['from_class' => 'from_class required (or provide student_ids)']);
+        if ($fromClass === $toClass) Response::error('Source and target class are the same', 400);
+        $count = Database::fetch("SELECT COUNT(*) as cnt FROM students WHERE class = ?", [$fromClass])['cnt'];
+        if ($count == 0) Response::error('No students found in source class', 400);
+        Database::query("UPDATE students SET class = ? WHERE class = ?", [$toClass, $fromClass]);
+        Response::success(['affected' => (int)$count], "Moved $count students from $fromClass to $toClass");
+    }
 });
+
+
+

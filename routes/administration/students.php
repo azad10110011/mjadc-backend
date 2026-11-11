@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 
 // GET /api/admin-panel/students
 $router->get('/api/admin-panel/students', function () {
@@ -10,8 +10,12 @@ $router->get('/api/admin-panel/students', function () {
          ORDER BY s.created_at DESC"
     );
     foreach ($students as &$s) {
-        $s['compulsory_subjects'] = $s['compulsory_subjects'] ? json_decode($s['compulsory_subjects'], true) : [];
-        $s['selective_subjects'] = $s['selective_subjects'] ? json_decode($s['selective_subjects'], true) : [];
+        // decode; if result is still a JSON string (legacy double-encoded rows), decode again
+        foreach (['compulsory_subjects', 'selective_subjects'] as $col) {
+            $v = $s[$col] ? json_decode($s[$col], true) : [];
+            if (is_string($v)) $v = json_decode($v, true);
+            $s[$col] = is_array($v) ? $v : [];
+        }
     }
     Response::success($students);
 });
@@ -96,10 +100,16 @@ $router->post('/api/admin-panel/students', function () {
             'present_address' => $data['present_address'] ?? null,
             'permanent_address' => $data['permanent_address'] ?? null,
             'student_group' => $data['student_group'] ?? null,
-            'compulsory_subjects' => isset($data['compulsory_subjects']) ? json_encode($data['compulsory_subjects']) : null,
-            'selective_subjects' => isset($data['selective_subjects']) ? json_encode($data['selective_subjects']) : null,
+            'blood_group' => $data['blood_group'] ?? null,
+            'academic_session' => $data['academic_session'] ?? null,
+            'class_roll' => $data['class_roll'] ?? null,
+            // multipart sends these as JSON strings â€” decode before encoding
+            'compulsory_subjects' => isset($data['compulsory_subjects']) ? json_encode(is_string($data['compulsory_subjects']) ? json_decode($data['compulsory_subjects'], true) : $data['compulsory_subjects']) : null,
+            'selective_subjects' => isset($data['selective_subjects']) ? json_encode(is_string($data['selective_subjects']) ? json_decode($data['selective_subjects'], true) : $data['selective_subjects']) : null,
             'optional_subject' => $data['optional_subject'] ?? null,
             'photo_path' => $data['photo_path'] ?? null,
+            // custom entry fields (Bangla names etc.) â€” accept string or array
+            'custom_fields' => isset($data['custom_fields']) ? json_encode(is_string($data['custom_fields']) ? json_decode($data['custom_fields'], true) : $data['custom_fields']) : null,
         ]);
 
         Response::created(['id' => $studentId, 'user_id' => $userId], 'Student created');
@@ -150,6 +160,20 @@ $router->post('/api/admin-panel/students/{id}', function (array $params) {
     if (isset($data['optional_subject'])) {
         $updateData['optional_subject'] = $data['optional_subject'];
     }
+    if (isset($data['blood_group'])) {
+        $updateData['blood_group'] = $data['blood_group'];
+    }
+    if (isset($data['academic_session'])) {
+        $updateData['academic_session'] = $data['academic_session'];
+    }
+    if (isset($data['class_roll'])) {
+        $updateData['class_roll'] = $data['class_roll'];
+    }
+    if (isset($data['custom_fields'])) {
+        // multipart sends a JSON string; accept both shapes
+        $cf = is_string($data['custom_fields']) ? json_decode($data['custom_fields'], true) : $data['custom_fields'];
+        if (is_array($cf)) $updateData['custom_fields'] = json_encode($cf);
+    }
     if (isset($data['present_address'])) {
         $updateData['present_address'] = $data['present_address'];
         $updateData['address'] = $data['present_address'];
@@ -174,4 +198,6 @@ $router->delete('/api/admin-panel/students/{id}', function (array $params) {
     }
     Database::delete('students', 'id = ?', [$params['id']]);
     Response::success(null, 'Student deleted');
+
 });
+

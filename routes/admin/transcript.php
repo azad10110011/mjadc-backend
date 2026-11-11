@@ -24,7 +24,41 @@ $router->post('/api/admin/transcript', function () {
     }
     $examId = $exam['id'];
 
-    // Build student query
+    // ---------- Build subject / paper lookup maps ----------
+    $subjects = Database::fetchAll("SELECT * FROM subjects ORDER BY `group`, name");
+    $subjectMap = [];          // subject id => subject row
+    $paperToSubject = [];      // paper name => subject id
+    $paperToSubjectName = [];  // paper name => subject name
+    $subjectPapersMap = [];    // subject id => papers []
+
+    foreach ($subjects as $s) {
+        $subjectMap[$s['id']] = $s;
+        $papers = Database::fetchAll("SELECT * FROM subject_papers WHERE parent_id = ? ORDER BY name", [$s['id']]);
+        $subjectPapersMap[$s['id']] = $papers;
+        foreach ($papers as $p) {
+            $paperToSubject[$p['name']] = $s['id'];
+            $paperToSubjectName[$p['name']] = $s['name'];
+        }
+    }
+
+    // ---------- Exam subject config (paper selection + calculation mode) ----------
+    $configs = Database::fetchAll(
+        "SELECT * FROM exam_subject_config WHERE exam_id = ?",
+        [$examId]
+    );
+    $configMap = [];
+    $selectedPaperNameBySubject = [];
+    foreach ($configs as $c) {
+        $configMap[$c['subject_id']] = $c;
+        if ($c['paper_selection'] === 'single' && $c['selected_paper_id']) {
+            $sp = Database::fetch("SELECT name FROM subject_papers WHERE id = ?", [$c['selected_paper_id']]);
+            if ($sp) {
+                $selectedPaperNameBySubject[$c['subject_id']] = $sp['name'];
+            }
+        }
+    }
+
+    // ---------- Build student query ----------
     $studentWhere = 's.class = ?';
     $studentParams = [$class];
     if ($studentIdFilter) {
@@ -49,7 +83,7 @@ $router->post('/api/admin/transcript', function () {
         Response::success([]);
     }
 
-    // Get all results for this exam
+    // ---------- Get all results for this exam ----------
     $results = Database::fetchAll(
         "SELECT er.*, e.exam_name, e.year
          FROM exam_results er
@@ -59,7 +93,6 @@ $router->post('/api/admin/transcript', function () {
         [$examId]
     );
 
-    // Group results by student_id
     $resultsByStudent = [];
     foreach ($results as $r) {
         $resultsByStudent[$r['student_id']][] = $r;
@@ -75,7 +108,7 @@ $router->post('/api/admin/transcript', function () {
         $optionalGp = 0;
         $hasOptional = !empty($student['optional_subject']);
 
-        // Look up optional subject's papers (public name → paper names)
+        // ----- Optional subject paper lookup (existing behaviour) -----
         $optionalPaperNames = [];
         $optionalPublicName = '';
         if ($hasOptional) {
@@ -96,35 +129,102 @@ $router->post('/api/admin/transcript', function () {
         $optionalGpaSum = 0;
         $optionalPaperCount = 0;
 
-        foreach ($studentResults as $r) {
-            $gpa = (float) ($r['gpa'] ?? 0);
-            $total = (float) ($r['total'] ?? ($r['mcq'] + $r['cq'] + $r['practical']));
-            $grade = $r['grade'] ?? 'F';
+        // ----- Group non-optional results by subject (for averaging) -----
+        $resultsBySubject = [];   // subject_id => [result rows]
+        $singleRowResults = [];   // [{ display_name, result }] for separate display
 
-            // Check if this result belongs to the optional subject
+        foreach ($studentResults as $r) {
+            $paperName = $r['subject'];
+            $subjectId = $paperToSubject[$paperName] ?? null;
+            $config = $configMap[$subjectId] ?? null;
+
+            // ----- Optional subject (existing behaviour) -----
             $isOptionalPaper = $hasOptional && (
-                (!empty($optionalPaperNames) && in_array($r['subject'], $optionalPaperNames))
-                || $r['subject'] === $student['optional_subject']
+                (!empty($optionalPaperNames) && in_array($paperName, $optionalPaperNames))
+                || $paperName === $student['optional_subject']
             );
 
             if ($isOptionalPaper) {
+                $total = (float)($r['total'] ?? ($r['mcq'] + $r['cq'] + $r['practical']));
+                $gpa = (float)($r['gpa'] ?? 0);
                 $optionalTotalSum += $total;
                 $optionalGpaSum += $gpa;
                 $optionalPaperCount++;
+                continue;
+            }
+
+            // ----- Exam subject config logic -----
+            if ($config && $config['paper_selection'] === 'single') {
+                // Show only the selected paper; display name = paper name
+                $selectedPaperName = $selectedPaperNameBySubject[$subjectId] ?? $paperName;
+                if ($paperName === $selectedPaperName) {
+                    $singleRowResults[] = [
+                        'display_name' => $paperName,
+                        'result' => $r,
+                    ];
+                }
+            } elseif ($config && $config['paper_selection'] === 'all' && $config['calculation_mode'] === 'average') {
+                // Group for average calculation
+                $resultsBySubject[$subjectId][] = $r;
             } else {
-                $subjects[] = [
-                    'subject' => $r['subject'],
-                    'total' => $total,
-                    'grade' => $grade,
-                    'gpa' => $gpa,
-                    'status' => $r['status'],
+                // Default / separate: show each paper individually with paper name
+                $singleRowResults[] = [
+                    'display_name' => $paperName,
+                    'result' => $r,
                 ];
-                $totalPoints += $gpa;
-                $subjectCount++;
             }
         }
 
-        // Add combined optional subject entry
+        // ----- Emit single-row results (separate papers) -----
+        foreach ($singleRowResults as $row) {
+            $r = $row['result'];
+            $gpa = (float)($r['gpa'] ?? 0);
+            $total = (float)($r['total'] ?? ($r['mcq'] + $r['cq'] + $r['practical']));
+            $grade = $r['grade'] ?? 'F';
+
+            $subjects[] = [
+                'subject' => $row['display_name'],
+                'total' => $total,
+                'grade' => $grade,
+                'gpa' => $gpa,
+                'status' => $r['status'],
+            ];
+            $totalPoints += $gpa;
+            $subjectCount++;
+        }
+
+        // ----- Emit average-mode subjects (combined papers) -----
+        foreach ($resultsBySubject as $subjectId => $papers) {
+            $subjectName = $subjectMap[$subjectId]['name'] ?? 'Unknown';
+            $paperCount = count($papers);
+            $totalSum = 0;
+            $gpaSum = 0;
+
+            foreach ($papers as $r) {
+                $total = (float)($r['total'] ?? ($r['mcq'] + $r['cq'] + $r['practical']));
+                $gpa = (float)($r['gpa'] ?? 0);
+                $totalSum += $total;
+                $gpaSum += $gpa;
+            }
+
+            $avgTotalPerPaper = $paperCount > 0 ? $totalSum / $paperCount : 0;
+            $avgGradeInfo = calculateGradeFromTotal($avgTotalPerPaper);
+
+            $subjects[] = [
+                'subject' => $subjectName,
+                'total' => $avgTotalPerPaper,
+                'grade' => $avgGradeInfo['grade'],
+                'gpa' => $avgGradeInfo['points'],
+                'status' => 'draft',
+                'is_average' => true,
+                'paper_count' => $paperCount,
+            ];
+
+            $totalPoints += $avgGradeInfo['points'];
+            $subjectCount++;
+        }
+
+        // ----- Combined optional subject entry (existing behaviour) -----
         if ($optionalPaperCount > 0) {
             $avgTotalPerPaper = $optionalTotalSum / $optionalPaperCount;
             $optGradeInfo = calculateGradeFromTotal($avgTotalPerPaper);
@@ -174,6 +274,29 @@ $router->post('/api/admin/transcript', function () {
     Response::success($transcripts);
 });
 
+if (!function_exists('calculateGradeFromTotal')) {
+function calculateGradeFromTotal(float $total): array
+{
+    $grades = [
+        ['min' => 80, 'grade' => 'A+', 'points' => 5.00],
+        ['min' => 70, 'grade' => 'A', 'points' => 4.00],
+        ['min' => 60, 'grade' => 'A-', 'points' => 3.50],
+        ['min' => 50, 'grade' => 'B', 'points' => 3.00],
+        ['min' => 40, 'grade' => 'C', 'points' => 2.00],
+        ['min' => 33, 'grade' => 'D', 'points' => 1.00],
+        ['min' => 0, 'grade' => 'F', 'points' => 0.00],
+    ];
+
+    foreach ($grades as $g) {
+        if ($total >= $g['min']) {
+            return $g;
+        }
+    }
+    return ['grade' => 'F', 'points' => 0.00];
+}}
+
+
+if (!function_exists('calculateGradeFromGpa')) {
 function calculateGradeFromGpa(float $gpa): string
 {
     if ($gpa >= 5.00) return 'A+';
@@ -183,4 +306,5 @@ function calculateGradeFromGpa(float $gpa): string
     if ($gpa >= 2.00) return 'C';
     if ($gpa >= 1.00) return 'D';
     return 'F';
-}
+}}
+

@@ -1,4 +1,4 @@
--- MJADC College Management System - Database Schema
+﻿-- MJADC College Management System - Database Schema
 -- MySQL 8.x
 
 
@@ -37,6 +37,8 @@ CREATE TABLE students (
     section VARCHAR(10),
     joining_year YEAR NOT NULL,
     academic_session VARCHAR(20) DEFAULT NULL,
+    class_roll VARCHAR(10) DEFAULT NULL,
+    blood_group VARCHAR(10) DEFAULT NULL,
     student_type ENUM('Regular','Irregular','Improvement') DEFAULT 'Regular',
     mobile VARCHAR(15),
     parent_mobile VARCHAR(15) DEFAULT NULL,
@@ -471,7 +473,7 @@ CREATE TABLE notifications (
 
 -- Insert default settings
 INSERT INTO site_settings (setting_key, setting_value) VALUES
-('footer_text', '© 2026-MJADC. WebSite Created & Designed By MAK Azad, Lecturer (ICT)'),
+('footer_text', 'Â© 2026-MJADC. WebSite Created & Designed By MAK Azad, Lecturer (ICT)'),
 ('college_name', 'Miah Jinnah Alam Degree College'),
 ('college_domain', 'mjadc.ac.bd'),
 ('smtp_host', ''),
@@ -523,3 +525,19 @@ INSERT INTO users (name, email, password_hash, gender) VALUES
 ('System Admin', 'admin@mjadc.ac.bd', '$2y$12$gpB2J1GPrvl7Pceog7tHme8LUIm9x0ElaqrII4soTw2W00.lE76ue', 'male');
 
 INSERT INTO user_roles (user_id, role) VALUES (1, 'admin');
+
+-- Custom entry fields (admin-configurable form fields for Add Student/Teacher/Staff)
+CREATE TABLE IF NOT EXISTS custom_entry_fields (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    target VARCHAR(20) NOT NULL COMMENT 'student | teacher | staff',
+    label VARCHAR(150) NOT NULL,
+    field_type VARCHAR(20) NOT NULL DEFAULT 'text' COMMENT 'text | number | date | dropdown | yes_no',
+    options TEXT NULL COMMENT 'comma-separated options for dropdown type',
+    required TINYINT(1) NOT NULL DEFAULT 0,
+    sort_order INT NOT NULL DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+ALTER TABLE students ADD COLUMN custom_fields TEXT NULL;
+ALTER TABLE teachers ADD COLUMN custom_fields TEXT NULL;
+ALTER TABLE staff ADD COLUMN custom_fields TEXT NULL;

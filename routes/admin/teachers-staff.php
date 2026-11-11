@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 
 // GET /api/admin/teachers-staff/teachers
 $router->get('/api/admin/teachers-staff/teachers', function () {
@@ -80,6 +80,7 @@ $router->post('/api/admin/teachers-staff/teacher', function () {
             'permanent_address' => $data['permanent_address'] ?? null,
             'pds_id' => $data['pds_id'] ?? null,
             'mpo_index' => $data['mpo_index'] ?? null,
+            'custom_fields' => isset($data['custom_fields']) && is_array($data['custom_fields']) ? json_encode($data['custom_fields']) : null,
         ]);
 
         // Sync to teacher_subjects (single subject dropdown + multi-subject support)
@@ -108,6 +109,9 @@ $router->put('/api/admin/teachers-staff/teacher/{id}', function (array $params) 
         $updateData = [];
         foreach (['name', 'name_bangla', 'name_english', 'designation', 'subject', 'group', 'mobile', 'email', 'joining_date', 'first_mpo_date', 'nid_number', 'whatsapp_number', 'present_address', 'permanent_address', 'gender', 'photo_path', 'pds_id', 'mpo_index'] as $f) {
             if (isset($data[$f])) $updateData[$f] = $data[$f];
+        }
+        if (isset($data['custom_fields']) && is_array($data['custom_fields'])) {
+            $updateData['custom_fields'] = json_encode($data['custom_fields']);
         }
         if (!empty($updateData)) {
             Database::update('teachers', $updateData, 'id = ?', ['id' => $params['id']]);
@@ -243,6 +247,7 @@ $router->post('/api/admin/teachers-staff/staff', function () {
             'permanent_address' => $data['permanent_address'] ?? null,
             'pds_id' => $data['pds_id'] ?? null,
             'mpo_index' => $data['mpo_index'] ?? null,
+            'custom_fields' => isset($data['custom_fields']) && is_array($data['custom_fields']) ? json_encode($data['custom_fields']) : null,
         ]);
 
         Response::created(['id' => $staffId], 'Staff added');
@@ -259,6 +264,9 @@ $router->put('/api/admin/teachers-staff/staff/{id}', function (array $params) {
         $updateData = [];
         foreach (['name', 'name_bangla', 'name_english', 'designation', 'subject', 'mobile', 'email', 'joining_date', 'first_mpo_date', 'nid_number', 'whatsapp_number', 'present_address', 'permanent_address', 'gender', 'photo_path', 'pds_id', 'mpo_index'] as $f) {
             if (isset($data[$f])) $updateData[$f] = $data[$f];
+        }
+        if (isset($data['custom_fields']) && is_array($data['custom_fields'])) {
+            $updateData['custom_fields'] = json_encode($data['custom_fields']);
         }
         if (!empty($updateData)) {
             Database::update('staff', $updateData, 'id = ?', ['id' => $params['id']]);
@@ -403,7 +411,7 @@ $router->post('/api/admin/teachers-staff/staff/{id}/move-down', function (array 
     Response::success(null, 'Reordered');
 });
 
-// POST /api/admin/teachers-staff/teacher/reorder – batch reorder teachers
+// POST /api/admin/teachers-staff/teacher/reorder â€“ batch reorder teachers
 $router->post('/api/admin/teachers-staff/teacher/reorder', function () {
     Auth::requireRole('admin');
     $data = json_decode(file_get_contents('php://input'), true);
@@ -415,7 +423,7 @@ $router->post('/api/admin/teachers-staff/teacher/reorder', function () {
     Response::success(null, 'Reordered');
 });
 
-// POST /api/admin/teachers-staff/staff/reorder – batch reorder staff
+// POST /api/admin/teachers-staff/staff/reorder â€“ batch reorder staff
 $router->post('/api/admin/teachers-staff/staff/reorder', function () {
     Auth::requireRole('admin');
     $data = json_decode(file_get_contents('php://input'), true);
@@ -426,3 +434,5 @@ $router->post('/api/admin/teachers-staff/staff/reorder', function () {
     }
     Response::success(null, 'Reordered');
 });
+
+

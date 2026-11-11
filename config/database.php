@@ -1,5 +1,17 @@
-<?php
-
+﻿<?php
+// Load .env file (key=value lines) from backend root if present.
+// Keeps one config file working on both XAMPP (local) and production.
+if (file_exists(__DIR__ . '/../.env')) {
+    foreach (file(__DIR__ . '/../.env', FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) as $line) {
+        $line = trim($line);
+        if ($line === '' || str_starts_with($line, '#')) continue;
+        $pos = strpos($line, '=');
+        if ($pos === false) continue;
+        $key = trim(substr($line, 0, $pos));
+        $val = trim(substr($line, $pos + 1));
+        if (!isset($_ENV[$key])) $_ENV[$key] = $val;
+    }
+}
 class Database
 {
     private static ?PDO $instance = null;

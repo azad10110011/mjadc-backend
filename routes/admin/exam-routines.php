@@ -12,6 +12,7 @@ function routineNormalize(array $row): array
         'class' => $row['class'],
         'exam_name' => $row['exam_name'],
         'exam_date' => $row['exam_date'],
+        'exam_time' => $row['exam_time'] ?? null,
         'subjects' => is_array($subs) ? $subs : [],
     ];
 }
@@ -50,6 +51,7 @@ $router->post('/api/admin/exam-routines', function () {
         'class' => $class,
         'exam_name' => $exam,
         'exam_date' => $date,
+        'exam_time' => (isset($data['exam_time']) && trim($data['exam_time']) !== '') ? trim($data['exam_time']) : null,
         'subjects' => json_encode($subjects),
     ]);
     Response::created(['id' => $id], 'Routine entry added');
@@ -65,6 +67,9 @@ $router->put('/api/admin/exam-routines/{id}', function (array $params) {
     if (isset($data['exam_date'])) {
         if (!trim($data['exam_date'])) Response::validationError(['exam_date' => 'Date is required']);
         $upd['exam_date'] = trim($data['exam_date']);
+    }
+    if (isset($data['exam_time'])) {
+        $upd['exam_time'] = trim($data['exam_time']) ?: null;
     }
     if (isset($data['subjects'])) {
         $subjects = array_values(array_filter(array_map('trim', (array)$data['subjects']), function ($s) { return $s !== ''; }));

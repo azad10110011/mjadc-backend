@@ -19,7 +19,13 @@ $router->post('/api/auth/login', function () {
         [$data['email']]
     );
 
-    if (!$user || !Auth::verifyPassword($data['password'], $user['password_hash'])) {
+    if (!$user) {
+        Response::unauthorized('Invalid email or password');
+    }
+    if ($user['status'] === 'frozen') {
+        Response::unauthorized('Your account is frozen. Contact the administrator.');
+    }
+    if (!Auth::verifyPassword($data['password'], $user['password_hash'])) {
         Response::unauthorized('Invalid email or password');
     }
 

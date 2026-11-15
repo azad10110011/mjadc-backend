@@ -239,9 +239,18 @@ $router->post('/api/admin/users/{id}/reset-password', function (array $params) {
         $password = bin2hex(random_bytes(4)); // 8 char random
     }
 
-    Database::update('users', [
-        'password_hash' => Auth::hashPassword($password)
-    ], 'id = ?', ['id' => $params['id']]);
+    $target = Database::fetch("SELECT id, name, email, status FROM users WHERE id = ?", [$params['id']]);
+    if (!$target) {
+        Response::notFound('User not found');
+    }
+
+    $update = ['password_hash' => Auth::hashPassword($password)];
+    // A frozen account cannot log in (login requires status='active'); a password reset
+    // means the admin intends this user to sign in again -> reactivate.
+    if ($target['status'] === 'frozen') {
+        $update['status'] = 'active';
+    }
+    Database::update('users', $update, 'id = ?', ['id' => $params['id']]);
 
     $user = Database::fetch("SELECT id, name, email FROM users WHERE id = ?", [$params['id']]);
 

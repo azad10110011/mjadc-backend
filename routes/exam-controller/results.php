@@ -193,6 +193,43 @@ $router->post('/api/exam-controller/results/approve-batch', function () {
     Response::success(['updated' => $updated], "{$updated} results approved");
 });
 
+// POST /api/exam-controller/results/back-to-teacher  {exam_name, subject, class}   (Session 77)
+// The Approve Result page has always called this, but it was missing (404 locally and on live).
+// Year-safe: only the NEWEST exam with that name + class is touched (never older years), and only
+// rows that already left draft (submitted/approved) go back to draft so the teacher can edit them.
+$router->post('/api/exam-controller/results/back-to-teacher', function () {
+    Auth::requireRole('exam_controller');
+    $data = json_decode(file_get_contents('php://input'), true) ?: [];
+
+    $examName = trim((string)($data['exam_name'] ?? ''));
+    $subject = trim((string)($data['subject'] ?? ''));
+    $class = trim((string)($data['class'] ?? ''));
+    if ($examName === '' || $subject === '' || $class === '') {
+        Response::validationError(['Missing filter parameters']);
+    }
+
+    $exam = Database::fetch(
+        "SELECT e.id FROM exams e
+         WHERE e.exam_name = ? AND e.class = ?
+           AND EXISTS (SELECT 1 FROM exam_results er WHERE er.exam_id = e.id AND er.subject = ?)
+         ORDER BY e.year DESC, e.id DESC LIMIT 1",
+        [$examName, $class, $subject]
+    );
+    if (!$exam) {
+        Response::notFound('No results found for this exam / subject / class');
+    }
+
+    $stmt = Database::query(
+        "UPDATE exam_results SET status = 'draft', approved_by = NULL
+         WHERE exam_id = ? AND subject = ? AND status IN ('submitted', 'approved')",
+        [$exam['id'], $subject]
+    );
+    $updated = $stmt->rowCount();
+
+    Response::success(['updated' => $updated],
+        $updated > 0 ? "{$updated} results returned to teacher" : 'These results are already with the teacher (draft)');
+});
+
 // PUT /api/exam-controller/results/{id}
 $router->put('/api/exam-controller/results/{id}', function (array $params) {
     $user = Auth::requireRole('exam_controller');

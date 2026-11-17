@@ -46,6 +46,7 @@ $router->post('/api/admin/exam-routines', function () {
     $subjects = array_values(array_filter(array_map('trim', (array)($data['subjects'] ?? [])), function ($s) { return $s !== ''; }));
     if (!$year || !$class || !$exam || !$date) Response::validationError(['year, class, exam_name and exam_date are required']);
     if (empty($subjects)) Response::validationError(['subjects' => 'Select at least one subject']);
+    catalogEnsureExam((string)$year, (string)$class, (string)$exam); // Session 88: the exam exists as soon as it has a routine
     $id = Database::insert('exam_routines', [
         'year' => $year,
         'class' => $class,

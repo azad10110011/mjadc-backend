@@ -200,8 +200,12 @@ $router->post('/api/admin/exam-fees/report', function () {
     $dateTo = trim($data['date_to'] ?? '') ?: null;
     $collectedBy = isset($data['collected_by']) ? (int)$data['collected_by'] : null;
 
-    // administration restriction: only own collections
-    if ($user['default_role'] === 'administration' || (isset($user['roles']) && in_array('administration', (array)$user['roles']) && !in_array('admin', (array)$user['roles']))) {
+    // Session 80: only Admin and Exam Controller may see other users' / all collections.
+    // Everyone else (administration, or any user granted the permission) is forced to their own rows,
+    // whatever collected_by they send. (Before, only the administration role was restricted, and a user
+    // who was exam_controller + administration with default panel administration was wrongly restricted.)
+    $canSeeAll = (bool)array_intersect(['admin', 'exam_controller'], (array)($user['roles'] ?? []));
+    if (!$canSeeAll) {
         $collectedBy = (int)$user['id'];
     }
 
@@ -238,8 +242,26 @@ $router->post('/api/admin/exam-fees/report', function () {
         'count' => count($rows),
         'rows' => $rows,
         'by_user' => $byUser,
-        'restricted_own' => $collectedBy === (int)$user['id'],
+        'restricted_own' => !$canSeeAll,
+        'can_see_all' => $canSeeAll,
+        'collected_by' => $collectedBy,
     ]);
+});
+
+// GET /api/admin/exam-fees/collectors?year=  (Session 80) — users who collected exam fees, for the
+// report's user dropdown. Admin and Exam Controller only (others may only see their own report).
+$router->get('/api/admin/exam-fees/collectors', function () {
+    Auth::requireAnyRole(['admin', 'exam_controller']);
+    $year = (int)($_GET['year'] ?? date('Y'));
+    Response::success(Database::fetchAll(
+        "SELECT ef.collected_by AS id, COALESCE(u.name, CONCAT('User #', ef.collected_by)) AS name, u.email,
+                COUNT(*) AS collections, SUM(ef.amount) AS total
+         FROM exam_fees ef LEFT JOIN users u ON u.id = ef.collected_by
+         WHERE ef.year = ? AND ef.collected_by IS NOT NULL
+         GROUP BY ef.collected_by, u.name, u.email
+         ORDER BY name",
+        [$year]
+    ));
 });
 
 // ---------------------------------------------------------------------------
@@ -324,4 +346,116 @@ $router->post('/api/admin/exam-fees/amount', function () {
         Database::insert('site_settings', ['setting_key' => $key, 'setting_value' => (string)$amount]);
     }
     Response::success(['saved' => true, 'exam_name' => $examName, 'amount' => $amount]);
+});
+
+// ---------------------------------------------------------------------------
+// POST /api/admin/exam-fees/paid-by-subject  (Session 96)
+// { year, exam_name, class?, group? } → students who paid this exam's fee, listed under every
+// subject they take (compulsory, selective, optional). Used by Exam Management › Exam Fee Paid List.
+// ---------------------------------------------------------------------------
+$router->post('/api/admin/exam-fees/paid-by-subject', function () use ($examFeeTotal) {
+    Auth::requireAnyRole(['admin', 'exam_controller']);
+    $d = json_decode(file_get_contents('php://input'), true) ?: [];
+    $year = (int)($d['year'] ?? 0);
+    $examName = trim((string)($d['exam_name'] ?? ''));
+    $class = trim((string)($d['class'] ?? ''));
+    $group = trim((string)($d['group'] ?? ''));
+    if ($year < 2000 || $examName === '') Response::validationError(['year and exam_name are required']);
+
+    $where = 'f.year = ? AND f.exam_name = ?';
+    $params = [$year, $examName];
+    if ($class !== '') { $where .= ' AND s.class = ?'; $params[] = $class; }
+    if ($group !== '') { $where .= ' AND s.student_group = ?'; $params[] = $group; }
+    $rows = Database::fetchAll(
+        "SELECT s.id, s.user_id, s.student_id, s.name, s.class, s.student_group, s.class_roll,
+                s.compulsory_subjects, s.selective_subjects, s.optional_subject,
+                SUM(f.amount) AS paid, MAX(f.collected_at) AS last_paid
+         FROM exam_fees f JOIN students s ON s.user_id = f.student_user_id
+         WHERE $where GROUP BY s.id",
+        $params
+    );
+
+    // waivers count towards "fully paid"
+    $waived = [];
+    foreach (Database::fetchAll("SELECT student_user_id, SUM(amount) w FROM exam_fee_waivers WHERE year = ? AND exam_name = ? GROUP BY student_user_id", [$year, $examName]) as $w) {
+        $waived[(int)$w['student_user_id']] = (float)$w['w'];
+    }
+    $feeFor = function (string $cls) use ($examFeeTotal, $examName): float {
+        $t = $examFeeTotal("$examName ($cls)");
+        return $t > 0 ? $t : $examFeeTotal($examName);
+    };
+
+    $norm = function (string $s): string {
+        $s = trim($s);
+        return strcasecmp($s, 'ICT') === 0 ? 'Information and Communication Technology' : $s;
+    };
+    $list = function ($v): array {
+        $a = json_decode((string)$v, true);
+        if (!is_array($a)) $a = $v ? explode(',', (string)$v) : [];
+        return array_values(array_filter(array_map(fn($x) => trim((string)$x), $a), fn($x) => $x !== '' && stripos($x, 'n/a') !== 0));
+    };
+
+    $groupNames = function_exists('catalogGroupNames') ? catalogGroupNames() : ['Science', 'Business Studies', 'Humanities'];
+    $groupRank = array_flip($groupNames);
+    usort($rows, fn($a, $b) =>
+        [($groupRank[$a['student_group']] ?? 99), (int)$a['class_roll'], $a['student_id']]
+        <=> [($groupRank[$b['student_group']] ?? 99), (int)$b['class_roll'], $b['student_id']]);
+
+    $subjects = [];   // name => ['types' => [], 'students' => []]
+    $students = [];
+    $total = 0.0;
+    foreach ($rows as $r) {
+        $fee = $feeFor((string)$r['class']);
+        $paid = (float)$r['paid'];
+        $w = $waived[(int)$r['user_id']] ?? 0.0;
+        $st = [
+            'student_id' => $r['student_id'], 'name' => $r['name'], 'class' => $r['class'],
+            'group' => $r['student_group'], 'class_roll' => $r['class_roll'],
+            'paid' => $paid, 'waived' => $w, 'fee' => $fee,
+            'status' => ($fee <= 0 || $paid + $w >= $fee) ? 'paid' : 'partial',
+            'last_paid' => $r['last_paid'],
+        ];
+        $students[] = $st;
+        $total += $paid;
+        $take = [];
+        foreach ($list($r['compulsory_subjects']) as $s) $take[$norm($s)] = 'compulsory';
+        foreach ($list($r['selective_subjects']) as $s) $take[$norm($s)] = $take[$norm($s)] ?? 'selective';
+        if (trim((string)$r['optional_subject']) !== '' && stripos((string)$r['optional_subject'], 'n/a') !== 0) {
+            $take[$norm((string)$r['optional_subject'])] = $take[$norm((string)$r['optional_subject'])] ?? 'optional';
+        }
+        foreach ($take as $name => $type) {
+            $subjects[$name] ??= ['subject' => $name, 'types' => [], 'students' => []];
+            $subjects[$name]['types'][$type] = true;
+            $subjects[$name]['students'][] = $st + ['type' => $type];
+        }
+    }
+
+    // Session 98: subjects grouped by their subject group — General (Bangla, English, ICT first),
+    // then the student groups in catalog order (Science, Business Studies, Humanities, …), then others.
+    $groupOrder = array_merge(['General'], $groupNames);
+    $gRank = array_flip($groupOrder);
+    $subjectGroup = []; // lower(name) => group with the best rank (e.g. English: General beats BMT)
+    foreach (Database::fetchAll("SELECT name, `group` FROM subjects") as $row) {
+        $k = strtolower(trim((string)$row['name']));
+        $g = (string)$row['group'];
+        if (!isset($subjectGroup[$k]) || ($gRank[$g] ?? 50) < ($gRank[$subjectGroup[$k]] ?? 50)) $subjectGroup[$k] = $g;
+    }
+    $first = ['bangla' => 0, 'english' => 1, 'information and communication technology' => 2];
+    $out = array_values($subjects);
+    foreach ($out as &$s) {
+        $s['subject_group'] = $subjectGroup[strtolower($s['subject'])] ?? 'Other';
+        if (isset($first[strtolower($s['subject'])])) $s['subject_group'] = 'General';
+    }
+    unset($s);
+    usort($out, fn($a, $b) =>
+        [($gRank[$a['subject_group']] ?? 50), $a['subject_group'], ($first[strtolower($a['subject'])] ?? 9), $a['subject']]
+        <=> [($gRank[$b['subject_group']] ?? 50), $b['subject_group'], ($first[strtolower($b['subject'])] ?? 9), $b['subject']]);
+    foreach ($out as &$s) { $s['types'] = array_keys($s['types']); $s['count'] = count($s['students']); }
+    unset($s);
+
+    Response::success([
+        'year' => $year, 'exam_name' => $examName, 'class' => $class, 'group' => $group,
+        'total_students' => count($students), 'total_amount' => $total,
+        'students' => $students, 'subjects' => $out,
+    ]);
 });

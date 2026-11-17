@@ -86,14 +86,11 @@ $router->put('/api/admin/exam-papers', function () {
     if (!is_array($selections)) {
         Response::validationError(['selections' => 'selections must be an array']);
     }
-    $exam = Database::fetch(
-        "SELECT id FROM exams WHERE year = ? AND class = ? AND exam_name = ?",
-        [$year, $class, $examName]
-    );
-    if (!$exam) {
-        Response::notFound('Exam not found');
+    // Session 88: a new exam is created here instead of failing with "Exam not found"
+    $examId = catalogEnsureExam((string)$year, (string)$class, (string)$examName);
+    if (!$examId) {
+        Response::validationError(['Enter a valid year, class (11th / 12th) and exam name']);
     }
-    $examId = $exam['id'];
 
     // Group selections by subject
     $bySubject = [];

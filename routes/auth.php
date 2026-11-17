@@ -34,6 +34,8 @@ $router->post('/api/auth/login', function () {
 
     unset($user['password_hash']);
     $user['roles'] = $roles;
+    $user['permissions'] = Permissions::effective($user); // Session 80: drives the dynamic sidebar
+    $user['permission_keys'] = array_column(Permissions::catalog(), 'key'); // which pages are permission-controlled
 
     Response::success([
         'token' => $token,
@@ -45,6 +47,8 @@ $router->post('/api/auth/login', function () {
 $router->get('/api/auth/me', function () {
     $user = Auth::requireAuth();
     unset($user['password_hash']);
+    $user['permissions'] = Permissions::effective($user); // Session 80: drives the dynamic sidebar
+    $user['permission_keys'] = array_column(Permissions::catalog(), 'key'); // which pages are permission-controlled
     Response::success($user);
 });
 

@@ -2,6 +2,7 @@
 
 require_once __DIR__ . '/../utils/JWTHandler.php';
 require_once __DIR__ . '/../utils/Response.php';
+require_once __DIR__ . '/../utils/Permissions.php';
 
 class Auth
 {
@@ -43,11 +44,14 @@ class Auth
         return $user;
     }
 
+    // Session 80: both checks also consult per-user permissions (utils/Permissions.php):
+    // a granted feature opens its endpoints to users without the role; a revoked feature closes them.
     public static function requireRole(string $role): array
     {
         $user = self::requireAuth();
-        if (!in_array($role, $user['roles'])) {
-            Response::forbidden("Access denied. {$role} role required");
+        $roleOk = in_array($role, $user['roles']);
+        if (!Permissions::allows($user, $roleOk)) {
+            Response::forbidden($roleOk ? 'Access to this feature has been removed for your account' : "Access denied. {$role} role required");
         }
         return $user;
     }
@@ -55,13 +59,10 @@ class Auth
     public static function requireAnyRole(array $roles): array
     {
         $user = self::requireAuth();
-        $userRoles = $user['roles'];
-        foreach ($roles as $role) {
-            if (in_array($role, $userRoles)) {
-                return $user;
-            }
+        $roleOk = (bool)array_intersect($roles, $user['roles']);
+        if (!Permissions::allows($user, $roleOk)) {
+            Response::forbidden($roleOk ? 'Access to this feature has been removed for your account' : 'Access denied. Insufficient permissions');
         }
-        Response::forbidden('Access denied. Insufficient permissions');
         return $user;
     }
 

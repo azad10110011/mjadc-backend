@@ -1,0 +1,13 @@
+# Session 87: let the website embed uploaded images in generated PDFs (Admit Card, Transcript).
+# PDFs draw photos on a canvas, which browsers only allow when the image server permits
+# cross-origin use. These are public images, so allowing any origin to READ them is safe.
+<IfModule mod_headers.c>
+    <FilesMatch "\.(jpe?g|png|gif|webp|svg)$">
+        Header set Access-Control-Allow-Origin "*"
+    </FilesMatch>
+</IfModule>
+
+# Never execute scripts that might be uploaded here
+<FilesMatch "\.(php|phtml|php\d|phar|cgi|pl|py|sh)$">
+    Require all denied
+</FilesMatch>

@@ -148,6 +148,19 @@ require __DIR__ . '/routes/admin/exam-routines.php'; // GET/POST/PUT/DELETE /api
 require __DIR__ . '/routes/admin/admit-card.php';
 require __DIR__ . '/routes/admin/admit-card-config.php';
 require __DIR__ . '/routes/admin/exam-fees.php';
+require __DIR__ . '/routes/admin/mark-entry-form.php'; // POST /api/admin/mark-entry-form
+require __DIR__ . '/routes/admin/transcript-verify.php'; // transcript QR verify (admin + public); needs transcript.php above
+require __DIR__ . '/routes/admin/result-summary.php'; // POST /api/admin/result-summary; needs transcript.php above
+require __DIR__ . '/routes/admin/id-cards.php'; // GET /api/admin/id-cards (restored, Session 77)
+require __DIR__ . '/routes/student/results.php'; // GET /api/student/results (restored, Session 77); needs transcript.php
+require __DIR__ . '/routes/teacher/attendance.php'; // teacher + admin attendance, /api/teacher/subjects (restored, Session 77)
+require __DIR__ . '/routes/admin/changelog.php'; // GET /api/admin/changelog (restored, Session 77)
+require __DIR__ . '/routes/student/attendance.php'; // GET /api/student/attendance (Session 79)
+require __DIR__ . '/routes/admin/permissions.php'; // user permission management (Session 80)
+require __DIR__ . '/routes/admin/seat-plan.php'; // exam rooms + seat plans (Session 80, admin only)
+require __DIR__ . '/routes/admin/exam-duty.php'; // hall duty allocation + letters data (Session 80, admin only)
+require __DIR__ . '/routes/admin/student-photos.php'; // POST /api/admin/students/{id}/photo — bulk photo upload (Session 86)
+require __DIR__ . '/routes/admin/catalog.php'; // exam names + student groups catalog (Session 88)
 require __DIR__ . '/routes/public/exam-fee-verify.php';
 
 // Dispatch

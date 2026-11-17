@@ -1,5 +1,16 @@
 ﻿<?php
 
+/** Replace the teacher's exam-mark (result) subjects when the request sends result_subjects (Session 90). */
+if (!function_exists('teacherSyncResultSubjects')) {
+function teacherSyncResultSubjects(int $teacherId, array $data): void
+{
+    if (!isset($data['result_subjects']) || !is_array($data['result_subjects'])) return;
+    Database::delete('teacher_subjects', 'teacher_id = ? AND type = ?', [$teacherId, 'result']);
+    foreach (array_unique(array_filter(array_map(fn($x) => trim((string)$x), $data['result_subjects']))) as $sub) {
+        Database::insert('teacher_subjects', ['teacher_id' => $teacherId, 'subject' => $sub, 'type' => 'result']);
+    }
+}}
+
 // GET /api/admin/teachers-staff/teachers
 $router->get('/api/admin/teachers-staff/teachers', function () {
     Auth::requireRole('admin');
@@ -94,6 +105,8 @@ $router->post('/api/admin/teachers-staff/teacher', function () {
                 Database::insert('teacher_subjects', ['teacher_id' => $teacherId, 'subject' => $sub, 'type' => 'public']);
             }
         }
+        // Session 90: subjects the teacher may upload / update exam marks for
+        teacherSyncResultSubjects((int)$teacherId, $data);
 
         Response::created(['id' => $teacherId], 'Teacher added');
     } catch (\Throwable $e) {
@@ -166,6 +179,8 @@ $router->put('/api/admin/teachers-staff/teacher/{id}', function (array $params) 
                 Database::insert('teacher_subjects', ['teacher_id' => $params['id'], 'subject' => $data['subject'], 'type' => 'public']);
             }
         }
+
+        teacherSyncResultSubjects((int)$params['id'], $data);
 
         Response::success(null, 'Teacher updated');
     } catch (\Throwable $e) {

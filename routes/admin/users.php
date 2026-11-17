@@ -4,13 +4,28 @@
 $router->get('/api/admin/users', function () {
     Auth::requireRole('admin');
 
+    // Optional ?roles=teacher,staff -> only users having at least one of these roles (Session 77).
+    // (The Teacher/Staff page always sent this, but it was ignored and every user was listed.)
+    $where = '';
+    $params = [];
+    $roleFilter = array_values(array_filter(array_map('trim', explode(',', (string)($_GET['roles'] ?? '')))));
+    if ($roleFilter) {
+        $ph = implode(',', array_fill(0, count($roleFilter), '?'));
+        $where = "WHERE u.id IN (SELECT user_id FROM user_roles WHERE role IN ($ph))";
+        $params = $roleFilter;
+    }
+
     $users = Database::fetchAll(
         "SELECT u.id, u.name, u.email, u.gender, u.date_of_birth, u.default_role, u.status, u.created_at,
-                GROUP_CONCAT(DISTINCT ur.role) as roles
+                GROUP_CONCAT(DISTINCT ur.role) as roles,
+                MAX(s.student_id) as student_id, MAX(s.class) as student_class
          FROM users u
          LEFT JOIN user_roles ur ON u.id = ur.user_id
+         LEFT JOIN students s ON s.user_id = u.id
+         $where
          GROUP BY u.id
-         ORDER BY u.created_at DESC"
+         ORDER BY u.created_at DESC",
+        $params
     );
 
     foreach ($users as &$u) {

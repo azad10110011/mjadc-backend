@@ -53,13 +53,21 @@ $router->post('/api/admin-panel/fees/collect', function () {
     $collectedBy = $user['name'] ?? 'Unknown';
     $feeType = $data['fee_type'] ?? 'Tuition Fee';
 
-    // Update or create fee record for current month/year
-    $existing = Database::fetch(
-        "SELECT id, amount_paid FROM tuition_fees WHERE student_id = ? AND year = ? AND month = ?",
-        [$student['id'], $currentYear, $currentMonth]
+    $amount = (float)$data['amount'];
+    if ($amount <= 0) Response::validationError(['Amount must be more than 0']);
+    // Session 100: pay the oldest outstanding dues of this fee type first; anything left is an advance on the current month
+    $left = duesApplyToTuition((int)$student['id'], $amount, 'amount_paid', $feeType, $transactionId, 'cash');
+    $data['amount'] = $left;
+
+    // Update or create fee record for current month/year (advance only)
+    $existing = $left <= 0 ? ['skip' => true] : Database::fetch(
+        "SELECT id, amount_paid FROM tuition_fees WHERE student_id = ? AND year = ? AND month = ? AND fee_type = ?",
+        [$student['id'], $currentYear, $currentMonth, $feeType]
     );
 
-    if ($existing) {
+    if (!empty($existing['skip'])) {
+        // fully used for outstanding dues
+    } elseif ($existing) {
         $newPaid = (float)$existing['amount_paid'] + (float)$data['amount'];
         Database::update('tuition_fees', [
             'amount_paid' => $newPaid,
@@ -85,7 +93,7 @@ $router->post('/api/admin-panel/fees/collect', function () {
     Database::insert('payments', [
         'transaction_id' => $transactionId,
         'student_id' => $student['id'],
-        'amount' => $data['amount'],
+        'amount' => $amount,
         'payment_type' => 'tuition_fee',
         'fee_type' => $feeType,
         'payment_method' => 'cash',
@@ -98,7 +106,7 @@ $router->post('/api/admin-panel/fees/collect', function () {
     Response::success([
         'transaction_id' => $transactionId,
         'collected_by' => $collectedBy,
-        'receipt' => "Payment of {$data['amount']} BDT received for {$currentMonth}/{$currentYear}",
+        'receipt' => "Payment of {$amount} BDT received" . ($left > 0 ? " ({$left} BDT as advance for {$currentMonth}/{$currentYear})" : ''),
     ], 'Payment recorded');
 });
 

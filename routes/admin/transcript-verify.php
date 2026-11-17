@@ -205,6 +205,15 @@ $router->get('/api/public/transcript-verify', function () {
         Response::success(['verified' => false, 'message' => TRANSCRIPT_VERIFY_OFF_MSG]);
     }
 
+    // Session 100: a result held for unpaid fees is not verified online either
+    $stu = Database::fetch("SELECT id, user_id, class FROM students WHERE student_id = ?", [$code]);
+    if ($stu) {
+        $dues = duesStatusFor([$stu], (int)$exam['year'], (string)$exam['exam_name']);
+        if (duesHeld($dues[(int)$stu['id']] ?? null)) {
+            Response::success(['verified' => false, 'message' => 'This result is on hold. ' . TRANSCRIPT_VERIFY_OFF_MSG]);
+        }
+    }
+
     $list = transcriptBuild($exam, $code, '', true);
     if (empty($list)) Response::error('Transcript not found. ' . TRANSCRIPT_VERIFY_OFF_MSG, 404);
 

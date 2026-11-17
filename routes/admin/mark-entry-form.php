@@ -169,7 +169,7 @@ $router->post('/api/admin/mark-entry-form', function () {
         ELSE 4 
     END";
 
-    $studentQuery = "SELECT student_id, name, class_roll, class, section, student_group, 
+    $studentQuery = "SELECT id, user_id, student_id, name, class_roll, class, section, student_group, 
                             compulsory_subjects, selective_subjects, optional_subject
                      FROM students 
                      WHERE class = ?";
@@ -181,6 +181,10 @@ $router->post('/api/admin/mark-entry-form', function () {
     $studentQuery .= " ORDER BY {$groupCase} ASC, CAST(class_roll AS UNSIGNED) ASC, class_roll ASC, student_id ASC";
     
     $allStudents = Database::fetchAll($studentQuery, $params);
+
+    // Session 100: only students with a chosen fee status (all / exam fee paid / tuition clear / all paid / dues)
+    $dueFilter = (string)($data['due_filter'] ?? 'all');
+    [$allStudents, , $excludedDue] = duesFilterRows($allStudents, (int)$year, (string)$examName, $dueFilter);
 
     $compulsoryList = ['Bangla', 'English', 'ICT', 'Information and Communication Technology'];
 
@@ -302,5 +306,5 @@ $router->post('/api/admin/mark-entry-form', function () {
         }
     }
 
-    Response::success(['subjects' => $resultSheets]);
+    Response::success(['subjects' => $resultSheets, 'due_filter' => $dueFilter, 'excluded_due' => $excludedDue]);
 });

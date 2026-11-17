@@ -30,11 +30,21 @@ $router->get('/api/student/dashboard', function () {
         [$student['id']]
     );
 
+    // Session 101: features the admin turned off for this student are not sent at all;
+    // a result on hold for unpaid fees (Session 100) is not shown here either.
+    $showResults = Permissions::has($user, '/p_G9n4s/results');
+    $showFees = Permissions::has($user, '/p_G9n4s/pay-fees');
+    if ($lastResult && function_exists('duesHeld')) {
+        $dues = duesStatusFor([$student], (int)$lastResult['year'], (string)$lastResult['exam_name']);
+        if (duesHeld($dues[(int)$student['id']] ?? null)) $lastResult = null;
+    }
+
     Response::success([
         'student' => $student,
-        'last_result' => $lastResult,
-        'total_due' => $feeSummary['total_due'] ?? 0,
-        'total_paid' => $feeSummary['total_paid'] ?? 0,
-        'outstanding' => max(($feeSummary['total_due'] ?? 0) - ($feeSummary['total_paid'] ?? 0) - ($feeSummary['total_waiver'] ?? 0), 0),
+        'last_result' => $showResults ? $lastResult : null,
+        'total_due' => $showFees ? ($feeSummary['total_due'] ?? 0) : null,
+        'total_paid' => $showFees ? ($feeSummary['total_paid'] ?? 0) : null,
+        'outstanding' => $showFees ? max(($feeSummary['total_due'] ?? 0) - ($feeSummary['total_paid'] ?? 0) - ($feeSummary['total_waiver'] ?? 0), 0) : null,
+        'features' => ['results' => $showResults, 'fees' => $showFees],
     ]);
 });

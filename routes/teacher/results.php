@@ -186,7 +186,7 @@ function teacherResultFetchClassStudents(string $class, string $group = ''): arr
         ELSE 4
     END";
 
-    $sql = "SELECT id, student_id, name, class_roll, class, section, student_group,
+    $sql = "SELECT id, user_id, student_id, name, class_roll, class, section, student_group,
                    compulsory_subjects, selective_subjects, optional_subject
             FROM students
             WHERE class = ?";
@@ -461,6 +461,9 @@ $router->get('/api/teacher/results/load-students', function () {
 
     // Class students ordered Science -> Business -> Humanities -> roll
     $allStudents = teacherResultFetchClassStudents($class, $group);
+    // Session 100: admin rule — which students subject teachers / exam controller may enter marks for
+    $markRule = duesSettings()['mark_entry'];
+    [$allStudents, , $hiddenDue] = duesFilterRows($allStudents, $year, $examName, $markRule);
 
     $result = [];
     foreach ($allStudents as $s) {
@@ -511,6 +514,9 @@ $router->get('/api/teacher/results/load-students', function () {
 
     Response::success([
         'students' => $result,
+        'mark_entry_rule' => $markRule,
+        'mark_entry_rule_label' => DUES_FILTERS[$markRule] ?? $markRule,
+        'hidden_due' => $hiddenDue,
         'part_configs' => $partConfigs,
         'subject_key' => $subjectKey,
         'subject_name' => $subjectToMatch,
@@ -615,6 +621,18 @@ $router->post('/api/teacher/results/upload', function () {
         }
     }
 
+    // Session 100: marks can only be entered for students allowed by the admin's fee rule
+    $markRule = duesSettings()['mark_entry'];
+    $allowedIds = null;
+    if ($markRule !== 'all') {
+        $codes = array_values(array_unique(array_filter(array_map(fn($m) => (string)($m['student_id'] ?? ''), $marks))));
+        $rows = $codes ? Database::fetchAll("SELECT id, user_id, class FROM students WHERE student_id IN (" . implode(',', array_fill(0, count($codes), '?')) . ")", $codes) : [];
+        $st = duesStatusFor($rows, (int)$year, (string)$examName);
+        $allowedIds = [];
+        foreach ($rows as $r) if (duesMatches($st[(int)$r['id']] ?? null, $markRule)) $allowedIds[(int)$r['id']] = true;
+    }
+    $skippedDue = 0;
+
     $saved = 0;
     foreach ($marks as $m) {
         $studentId = $m['student_id'] ?? '';
@@ -624,6 +642,10 @@ $router->post('/api/teacher/results/upload', function () {
 
         $student = Database::fetch("SELECT id FROM students WHERE student_id = ?", [$studentId]);
         if (!$student) {
+            continue;
+        }
+        if ($allowedIds !== null && !isset($allowedIds[(int)$student['id']])) {
+            $skippedDue++;
             continue;
         }
 
@@ -708,7 +730,7 @@ $router->post('/api/teacher/results/upload', function () {
         $saved++;
     }
 
-    Response::success(['message' => 'Results uploaded successfully', 'saved_count' => $saved, 'subject_key' => $subjectKey]);
+    Response::success(['message' => 'Results uploaded successfully' . ($skippedDue ? " ($skippedDue student(s) skipped: fee rule)" : ''), 'saved_count' => $saved, 'skipped_due' => $skippedDue, 'subject_key' => $subjectKey]);
 });
 
 // GET /api/teacher/results/download

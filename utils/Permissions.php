@@ -109,6 +109,42 @@ class Permissions
         return $out;
     }
 
+    /**
+     * Panel tasks chosen on the create / edit user form (Session 102).
+     * $off = keys of the user's role-default tasks the admin UNticked → stored as REVOKE;
+     * every other role-default task is switched back on (its revoke removed). Extra grants are kept.
+     * Admins are never restricted, so nothing is stored for them.
+     */
+    public static function applyPanelTasks(int $userId, array $off, int $by): void
+    {
+        self::ensureSchema();
+        $roles = array_column(Database::fetchAll("SELECT role FROM user_roles WHERE user_id = ?", [$userId]), 'role');
+        if (in_array('admin', $roles, true)) return;
+        $off = array_flip(array_map('strval', $off));
+        foreach (self::catalog() as $it) {
+            if (!self::isDefault($it, $roles)) continue;
+            if (isset($off[$it['key']])) {
+                Database::query(
+                    "INSERT INTO user_permissions (user_id, perm_key, effect, updated_by) VALUES (?, ?, 'revoke', ?)
+                     ON DUPLICATE KEY UPDATE effect = 'revoke', updated_by = VALUES(updated_by)",
+                    [$userId, $it['key'], $by]);
+            } else {
+                Database::query("DELETE FROM user_permissions WHERE user_id = ? AND perm_key = ? AND effect = 'revoke'", [$userId, $it['key']]);
+            }
+        }
+        self::clearCache($userId);
+    }
+
+    /** Does this user have this feature (page key)? Admin always does. (Session 101) */
+    public static function has(array $user, string $key): bool
+    {
+        if (self::isAdmin($user)) return true;
+        foreach (self::effective($user) as $k) {
+            if ($k === $key || strpos($k, $key . '#') === 0) return true;
+        }
+        return false;
+    }
+
     /** "METHOD /api/path" pattern vs request. Path matches itself or anything below it. */
     public static function patternMatches(string $pattern, string $method, string $path): bool
     {

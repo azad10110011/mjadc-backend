@@ -11,6 +11,15 @@ $router->get('/api/results/search', function () {
         Response::validationError(['Missing required filter parameters']);
     }
 
+    // Session 100: results held for unpaid fees are not shown
+    $stu = Database::fetch("SELECT id, user_id, class FROM students WHERE student_id = ?", [$studentId]);
+    if ($stu && preg_match('/^\d{4}$/', (string)$year)) {
+        $dues = duesStatusFor([$stu], (int)$year, (string)$examName);
+        if (duesHeld($dues[(int)$stu['id']] ?? null)) {
+            Response::error('This result is on hold because of unpaid fees. Please contact the college office.', 403);
+        }
+    }
+
     $result = Database::fetch(
         "SELECT s.student_id, s.name, 
                 AVG(er.gpa) as gpa

@@ -60,12 +60,17 @@ $router->post('/api/exam-controller/results/upload', function () {
         ];
     }
 
+    $markRule = duesSettings()['mark_entry']; // Session 100: admin fee rule for mark entry
     foreach ($marks as $mark) {
         $student = Database::fetch(
-            "SELECT id FROM students WHERE student_id = ? AND class = ?",
+            "SELECT id, user_id, class FROM students WHERE student_id = ? AND class = ?",
             [$mark['student_id'], $data['class']]
         );
         if (!$student) continue;
+        if ($markRule !== 'all') {
+            $st = duesStatusFor([$student], (int)$data['year'], (string)$data['exam_name']);
+            if (!duesMatches($st[(int)$student['id']] ?? null, $markRule)) continue;
+        }
 
         $partsData = $mark['parts_data'] ?? [];
         $lowerParts = [];

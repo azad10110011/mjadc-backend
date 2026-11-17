@@ -85,13 +85,11 @@ $router->post('/api/principal/fees/waiver', function () {
         Response::notFound('Student not found');
     }
 
-    // Apply waiver to all unpaid months (only increment waiver_amount, never modify amount_due)
-    Database::query(
-        "UPDATE tuition_fees 
-         SET waiver_amount = waiver_amount + ?
-         WHERE student_id = ? AND (amount_due - amount_paid - waiver_amount) > 0",
-        [$data['amount'], $student['id']]
-    );
+    // Session 100: the waiver amount is spread over the oldest unpaid dues once (it used to be added to EVERY
+    // unpaid month, so a 500 waiver on 6 months waived 3000). Never more than is outstanding.
+    if ((float)$data['amount'] <= 0) Response::validationError(['Waiver amount must be more than 0']);
+    $left = duesApplyToTuition((int)$student['id'], (float)$data['amount'], 'waiver_amount');
+    if ($left > 0) Response::success(['not_applied' => $left], "Waiver applied; $left was more than the outstanding dues and was not applied");
 
     // Log waiver in settings or a waiver log table
     Response::success(null, 'Waiver applied successfully');

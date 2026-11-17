@@ -14,7 +14,7 @@ function teacherSyncResultSubjects(int $teacherId, array $data): void
 // GET /api/admin/teachers-staff/teachers
 $router->get('/api/admin/teachers-staff/teachers', function () {
     Auth::requireRole('admin');
-    $teachers = Database::fetchAll("SELECT t.id, t.name, t.name_bangla, t.name_english, t.designation, t.subject, t.`group`, t.email, t.mobile, t.whatsapp_number, t.photo_path, t.joining_date, t.first_mpo_date, t.nid_number, t.present_address, t.permanent_address, t.gender, t.pds_id, t.mpo_index, u.date_of_birth FROM teachers t LEFT JOIN users u ON t.user_id = u.id ORDER BY t.sort_order, t.name");
+    $teachers = Database::fetchAll("SELECT t.id, t.user_id, (SELECT GROUP_CONCAT(ur.role) FROM user_roles ur WHERE ur.user_id = t.user_id) AS roles, t.name, t.name_bangla, t.name_english, t.designation, t.subject, t.`group`, t.email, t.mobile, t.whatsapp_number, t.photo_path, t.joining_date, t.first_mpo_date, t.nid_number, t.present_address, t.permanent_address, t.gender, t.pds_id, t.mpo_index, u.date_of_birth FROM teachers t LEFT JOIN users u ON t.user_id = u.id ORDER BY t.sort_order, t.name");
     $now = new DateTime();
     foreach ($teachers as &$t) {
         $t['experience'] = $t['first_mpo_date'] ? $now->diff(new DateTime($t['first_mpo_date']))->format('%y years, %m months, %d days') : null;
@@ -36,7 +36,7 @@ $router->get('/api/admin/teachers-staff/teachers', function () {
 // GET /api/admin/teachers-staff/staff
 $router->get('/api/admin/teachers-staff/staff', function () {
     Auth::requireRole('admin');
-    $staff = Database::fetchAll("SELECT s.id, s.name, s.name_bangla, s.name_english, s.designation, s.subject, s.email, s.mobile, s.whatsapp_number, s.photo_path, s.joining_date, s.first_mpo_date, s.nid_number, s.present_address, s.permanent_address, s.gender, s.pds_id, s.mpo_index, u.date_of_birth FROM staff s LEFT JOIN users u ON s.user_id = u.id ORDER BY s.sort_order, s.name");
+    $staff = Database::fetchAll("SELECT s.id, s.user_id, (SELECT GROUP_CONCAT(ur.role) FROM user_roles ur WHERE ur.user_id = s.user_id) AS roles, s.name, s.name_bangla, s.name_english, s.designation, s.subject, s.email, s.mobile, s.whatsapp_number, s.photo_path, s.joining_date, s.first_mpo_date, s.nid_number, s.present_address, s.permanent_address, s.gender, s.pds_id, s.mpo_index, u.date_of_birth FROM staff s LEFT JOIN users u ON s.user_id = u.id ORDER BY s.sort_order, s.name");
     $now = new DateTime();
     foreach ($staff as &$s) {
         $s['experience'] = $s['first_mpo_date'] ? $now->diff(new DateTime($s['first_mpo_date']))->format('%y years, %m months, %d days') : null;
@@ -108,6 +108,10 @@ $router->post('/api/admin/teachers-staff/teacher', function () {
         // Session 90: subjects the teacher may upload / update exam marks for
         teacherSyncResultSubjects((int)$teacherId, $data);
 
+        // Session 102: panel tasks chosen on the form (unticked role tasks → removed for this user)
+        if (isset($data['disabled_features']) && is_array($data['disabled_features']) && $userId) {
+            Permissions::applyPanelTasks((int)$userId, $data['disabled_features'], (int)(Auth::getUser()['id'] ?? 0));
+        }
         Response::created(['id' => $teacherId], 'Teacher added');
     } catch (\Throwable $e) {
         Response::error('Internal server error: ' . $e->getMessage(), 500);
@@ -161,9 +165,16 @@ $router->put('/api/admin/teachers-staff/teacher/{id}', function (array $params) 
             if (!empty($userUpdate)) Database::update('users', $userUpdate, 'id = ?', ['id' => $userId]);
 
             if (isset($data['roles']) && is_array($data['roles'])) {
-                Database::delete('user_roles', 'user_id = ?', [$userId]);
-                foreach ($data['roles'] as $role) {
-                    Database::insert('user_roles', ['user_id' => $userId, 'role' => $role]);
+                // Session 102: this form only manages these roles — keep any others (admin, student). Before, saving
+                // here replaced ALL roles, so editing a teacher who is also admin removed their admin access.
+                $managed = ['teacher', 'exam_controller', 'administration', 'principal', 'staff'];
+                $keep = array_values(array_diff(array_column(Database::fetchAll("SELECT role FROM user_roles WHERE user_id = ?", [$userId]), 'role'), $managed));
+                $newRoles = array_values(array_unique(array_merge($keep, array_values(array_intersect((array)$data['roles'], $managed)))));
+                if ($newRoles) {
+                    Database::delete('user_roles', 'user_id = ?', [$userId]);
+                    foreach ($newRoles as $role) {
+                        Database::insert('user_roles', ['user_id' => $userId, 'role' => $role]);
+                    }
                 }
             }
         }
@@ -181,6 +192,11 @@ $router->put('/api/admin/teachers-staff/teacher/{id}', function (array $params) 
         }
 
         teacherSyncResultSubjects((int)$params['id'], $data);
+        $tUser = (int)(Database::fetch("SELECT user_id FROM teachers WHERE id = ?", [$params['id']])['user_id'] ?? 0);
+        // Session 102: panel tasks chosen on the form (unticked role tasks → removed for this user)
+        if (isset($data['disabled_features']) && is_array($data['disabled_features']) && $tUser) {
+            Permissions::applyPanelTasks((int)$tUser, $data['disabled_features'], (int)(Auth::getUser()['id'] ?? 0));
+        }
 
         Response::success(null, 'Teacher updated');
     } catch (\Throwable $e) {
@@ -265,6 +281,10 @@ $router->post('/api/admin/teachers-staff/staff', function () {
             'custom_fields' => isset($data['custom_fields']) && is_array($data['custom_fields']) ? json_encode($data['custom_fields']) : null,
         ]);
 
+        // Session 102: panel tasks chosen on the form (unticked role tasks → removed for this user)
+        if (isset($data['disabled_features']) && is_array($data['disabled_features']) && $userId) {
+            Permissions::applyPanelTasks((int)$userId, $data['disabled_features'], (int)(Auth::getUser()['id'] ?? 0));
+        }
         Response::created(['id' => $staffId], 'Staff added');
     } catch (\Throwable $e) {
         Response::error('Internal server error: ' . $e->getMessage(), 500);
@@ -318,11 +338,23 @@ $router->put('/api/admin/teachers-staff/staff/{id}', function (array $params) {
             if (!empty($userUpdate)) Database::update('users', $userUpdate, 'id = ?', ['id' => $userId]);
 
             if (isset($data['roles']) && is_array($data['roles'])) {
-                Database::delete('user_roles', 'user_id = ?', [$userId]);
-                foreach ($data['roles'] as $role) {
-                    Database::insert('user_roles', ['user_id' => $userId, 'role' => $role]);
+                // Session 102: this form only manages these roles — keep any others (admin, student). Before, saving
+                // here replaced ALL roles, so editing a teacher who is also admin removed their admin access.
+                $managed = ['teacher', 'exam_controller', 'administration', 'principal', 'staff'];
+                $keep = array_values(array_diff(array_column(Database::fetchAll("SELECT role FROM user_roles WHERE user_id = ?", [$userId]), 'role'), $managed));
+                $newRoles = array_values(array_unique(array_merge($keep, array_values(array_intersect((array)$data['roles'], $managed)))));
+                if ($newRoles) {
+                    Database::delete('user_roles', 'user_id = ?', [$userId]);
+                    foreach ($newRoles as $role) {
+                        Database::insert('user_roles', ['user_id' => $userId, 'role' => $role]);
+                    }
                 }
             }
+        }
+        $sUser = (int)(Database::fetch("SELECT user_id FROM staff WHERE id = ?", [$params['id']])['user_id'] ?? 0);
+        // Session 102: panel tasks chosen on the form (unticked role tasks → removed for this user)
+        if (isset($data['disabled_features']) && is_array($data['disabled_features']) && $sUser) {
+            Permissions::applyPanelTasks((int)$sUser, $data['disabled_features'], (int)(Auth::getUser()['id'] ?? 0));
         }
         Response::success(null, 'Staff updated');
     } catch (\Throwable $e) {

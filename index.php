@@ -48,6 +48,7 @@ require_once __DIR__ . '/utils/Response.php';
 require_once __DIR__ . '/utils/Router.php';
 require_once __DIR__ . '/utils/Validator.php';
 require_once __DIR__ . '/utils/JWTHandler.php';
+require_once __DIR__ . '/utils/Dues.php'; // fee due status, mark-entry / result-hold rules (Session 100)
 require_once __DIR__ . '/middleware/Cors.php';
 require_once __DIR__ . '/middleware/Auth.php';
 
@@ -159,6 +160,12 @@ require __DIR__ . '/routes/student/attendance.php'; // GET /api/student/attendan
 require __DIR__ . '/routes/admin/permissions.php'; // user permission management (Session 80)
 require __DIR__ . '/routes/admin/seat-plan.php'; // exam rooms + seat plans (Session 80, admin only)
 require __DIR__ . '/routes/admin/exam-duty.php'; // hall duty allocation + letters data (Session 80, admin only)
+if (preg_match('#/api/(admin/(tuition-fees|fees|transactions|due-rules)|admin-panel/fees|principal/fees|student/(fees|pay-fee)|payments)#', $requestUri)) {
+    duesEnsureSchema(); // adds tuition_fees.fee_type, payments.fee_type/collected_by once (Session 100)
+}
+require __DIR__ . '/routes/admin/due-rules.php'; // due rules settings + preview (Session 100)
+require __DIR__ . '/routes/admin/board-exam.php'; // Board Exam Management: exams, venues, rooms, candidates, routine, seats (Session 99)
+require __DIR__ . '/routes/admin/board-duty.php'; // Board exam hall duty + letters incl. external teachers (Session 99)
 require __DIR__ . '/routes/admin/student-photos.php'; // POST /api/admin/students/{id}/photo — bulk photo upload (Session 86)
 require __DIR__ . '/routes/admin/catalog.php'; // exam names + student groups catalog (Session 88)
 require __DIR__ . '/routes/public/exam-fee-verify.php';

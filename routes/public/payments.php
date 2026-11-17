@@ -3,7 +3,7 @@
 // GET /api/payments/student/{student_id}
 $router->get('/api/payments/student/{student_id}', function (array $params) {
     $student = Database::fetch(
-        "SELECT id, student_id, name, class, section, mobile 
+        "SELECT id, student_id, name, class, section
          FROM students WHERE student_id = ?",
         [$params['student_id']]
     );
@@ -99,6 +99,15 @@ $router->post('/api/payments/initiate', function () {
 
 // POST /api/payments/callback
 $router->post('/api/payments/callback', function () {
+    // Session 100: only the payment gateway may confirm a payment. Before, anyone could POST
+    // {transaction_id, status:'success'} and mark fees as paid. Requires PAYMENT_CALLBACK_SECRET in .env
+    // (sent by the gateway integration in the X-Callback-Secret header).
+    $secret = (string)($_ENV['PAYMENT_CALLBACK_SECRET'] ?? getenv('PAYMENT_CALLBACK_SECRET') ?: '');
+    $given = (string)($_SERVER['HTTP_X_CALLBACK_SECRET'] ?? '');
+    if ($secret === '' || !hash_equals($secret, $given)) {
+        Response::error('Payment confirmation rejected: not from the payment gateway', 403);
+    }
+
     $data = json_decode(file_get_contents('php://input'), true);
 
     // Verify with Sonali Bank

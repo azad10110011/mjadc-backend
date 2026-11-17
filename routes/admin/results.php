@@ -176,7 +176,12 @@ $router->get('/api/admin/results/upload-data', function () {
 
     // Only students who take the subject, ordered Science -> Business Studies -> Humanities -> roll
     $students = [];
-    foreach (teacherResultFetchClassStudents($class, $group) as $st) {
+    // Session 100: admin can enter any student's marks, filtered by fee status (dropdown)
+    $classRows = teacherResultFetchClassStudents($class, $group);
+    $dueFilter = trim((string)($_GET['due_filter'] ?? 'all'));
+    $dueStatus = duesStatusFor($classRows, $year, $examName);
+    foreach ($classRows as $st) {
+        if (!duesMatches($dueStatus[(int)$st['id']] ?? null, $dueFilter)) continue;
         $existing = $existingMarks[$st['id']] ?? null;
         if (!teacherResultTakesSubject($st, $subjectToMatch, $paperToMatch, $existing !== null)) {
             continue;
@@ -223,12 +228,14 @@ $router->get('/api/admin/results/upload-data', function () {
             'total' => $existing ? $existing['total'] : 0,
             'grade' => $existing ? $existing['grade'] : '',
             'gpa' => $existing ? $existing['gpa'] : 0,
+            'dues' => $dueStatus[(int)$st['id']] ?? null,
         ];
     }
 
     Response::success([
         'part_configs' => $partConfigs,
         'students' => $students,
+        'due_filter' => $dueFilter,
         'subject_key' => $subjectKey,
         'subject_name' => $subjectToMatch,
         'paper_name' => $paperToMatch,

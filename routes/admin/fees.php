@@ -49,8 +49,13 @@ $router->post('/api/admin/fees/add', function () {
     $amount = (float)$data['amount'];
     $feeType = $data['fee_type'];
     $note = $data['note'] ?? '';
-    $months = $data['months'] ?? [];
-    $currentYear = (int)date('Y');
+    $months = array_values(array_unique(array_filter(array_map('intval', (array)($data['months'] ?? [])), fn($m) => $m >= 1 && $m <= 12)));
+    // Session 100: fees can be set for any year (was always the current year)
+    $currentYear = (int)($data['year'] ?? date('Y'));
+    if ($currentYear < 2000 || $currentYear > 2100) Response::validationError(['Enter a valid year']);
+    if ($amount <= 0) Response::validationError(['Amount must be more than 0']);
+    if ($feeType === 'Tuition Fee' && !$months) Response::validationError(['Select at least one month for tuition fee']);
+    $skipped = 0;
 
     // Get target student IDs
     $studentIds = [];
@@ -74,7 +79,7 @@ $router->post('/api/admin/fees/add', function () {
                     "SELECT id FROM tuition_fees WHERE student_id = ? AND year = ? AND month = ?",
                     [$sid, $currentYear, $m]
                 );
-                if (!$existing) {
+                if ($existing) { $skipped++; } else {
                     Database::insert('tuition_fees', [
                         'student_id' => $sid,
                         'year' => $currentYear,
@@ -88,8 +93,9 @@ $router->post('/api/admin/fees/add', function () {
             }
         }
     } else {
-        // Other fee types: create one record per student
+        // Other fee types: one record per student per year and fee type (month 0); existing ones are kept
         foreach ($studentIds as $sid) {
+            if (Database::fetch("SELECT id FROM tuition_fees WHERE student_id = ? AND year = ? AND month = 0 AND fee_type = ?", [$sid, $currentYear, $feeType])) { $skipped++; continue; }
             Database::insert('tuition_fees', [
                 'student_id' => $sid,
                 'year' => $currentYear,
@@ -102,7 +108,7 @@ $router->post('/api/admin/fees/add', function () {
         }
     }
 
-    Response::created(['records_created' => $created], "{$created} fee record(s) created");
+    Response::created(['records_created' => $created, 'skipped' => $skipped], "{$created} fee record(s) created" . ($skipped ? ", $skipped already existed" : ''));
 });
 
 // GET /api/admin/fees/student-due?student_id=
@@ -169,32 +175,10 @@ $router->post('/api/admin/fees/waiver', function () {
     if (!$student) Response::notFound('Student not found');
 
     $amount = (float)$data['amount'];
-
-    // Apply waiver to the student's fees: order by newest first, apply until amount is exhausted
-    $fees = Database::fetchAll(
-        "SELECT id, amount_due, amount_paid, waiver_amount, 
-                (amount_due - amount_paid - COALESCE(waiver_amount, 0)) as outstanding
-         FROM tuition_fees 
-         WHERE student_id = ? AND (amount_due - amount_paid - COALESCE(waiver_amount, 0)) > 0
-         ORDER BY year DESC, month DESC",
-        [$student['id']]
-    );
-
-    $remaining = $amount;
-    $updated = 0;
-    foreach ($fees as $fee) {
-        if ($remaining <= 0) break;
-        $outstanding = (float)$fee['outstanding'];
-        $apply = min($remaining, $outstanding);
-        $currentWaiver = (float)($fee['waiver_amount'] ?? 0);
-        Database::update('tuition_fees', [
-            'waiver_amount' => $currentWaiver + $apply
-        ], 'id = ?', ['id' => $fee['id']]);
-        $remaining -= $apply;
-        $updated++;
-    }
-
-    Response::success(['waiver_amount' => $amount, 'records_updated' => $updated], 'Waiver applied successfully');
+    if ($amount <= 0) Response::validationError(['Waiver amount must be more than 0']);
+    // Session 100: one shared rule — the waiver covers the oldest outstanding dues first, never more than is due
+    $left = duesApplyToTuition((int)$student['id'], $amount, 'waiver_amount');
+    Response::success(['waiver_amount' => $amount - $left, 'not_applied' => $left], $left > 0 ? 'Waiver applied; ' . $left . ' was more than the outstanding dues and was not applied' : 'Waiver applied successfully');
 });
 
 // GET /api/admin/fees/collected-summary?from=&to=&collected_by=&fee_type=&year=

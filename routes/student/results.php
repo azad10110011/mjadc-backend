@@ -10,7 +10,7 @@
 $router->get('/api/student/results', function () {
     $user = Auth::requireRole('student');
 
-    $student = Database::fetch("SELECT id, student_id, class FROM students WHERE user_id = ?", [$user['id']]);
+    $student = Database::fetch("SELECT id, user_id, student_id, class FROM students WHERE user_id = ?", [$user['id']]);
     if (!$student) {
         Response::notFound('Student profile not found');
     }
@@ -38,6 +38,12 @@ $router->get('/api/student/results', function () {
     $exam = $exams[0];
     if ((int)$exam['published_rows'] === 0 || (int)$exam['published_rows'] < (int)$exam['total_rows']) {
         Response::notFound("The {$examName} {$exam['year']} result has not been published yet.");
+    }
+
+    // Session 100: result + marksheet held while the admin's due rule says so
+    $dues = duesStatusFor([$student], (int)$exam['year'], (string)$exam['exam_name']);
+    if (duesHeld($dues[(int)$student['id']] ?? null)) {
+        Response::error(duesHoldMessage($dues[(int)$student['id']]), 403);
     }
 
     // Whole class once (for merit position), then this student

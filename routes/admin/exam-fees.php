@@ -6,12 +6,9 @@
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-$examFeeTotal = function (string $examName, string $class = null): float {
-    // Fee amount configured per exam: use max amount found in existing collections or default 0
-    // If a settings row exists use it; otherwise 0 means "no fixed total" â€” dues computed against it.
-    $row = Database::fetch("SELECT setting_value FROM site_settings WHERE setting_key = ? LIMIT 1", ['exam_fee_amount_' . strtolower(str_replace(' ', '_', $examName))]);
-    if ($row) return (float)$row['setting_value'];
-    return 0.0;
+$examFeeTotal = function (string $examName, ?string $class = null): float {
+    // Session 100: Exam Fee Set saves "Pre-Test (12th)"; collection uses "Pre-Test" — try the class key first.
+    return duesExamFee($examName, $class);
 };
 
 $examFeeStatus = function (int $studentUserId, string $year, string $examName) use ($examFeeTotal): array {
@@ -39,7 +36,8 @@ $examFeeStatus = function (int $studentUserId, string $year, string $examName) u
         ];
         $last = $r;
     }
-    $total = $examFeeTotal($examName);
+    $cls = Database::fetch("SELECT class FROM students WHERE user_id = ?", [$studentUserId])['class'] ?? null;
+    $total = $examFeeTotal($examName, $cls);
     $due = $total > 0 ? max(0, $total - $paid - $waived) : 0.0;
     return [
         'records' => count($rows) > 0,
@@ -140,7 +138,7 @@ $router->post('/api/admin/exam-fees/status', function () use ($examFeeTotal) {
     $examName = trim($data['exam_name'] ?? '');
     if (!$year || !$examName) Response::validationError(['year and exam_name are required']);
 
-    $total = $examFeeTotal($examName);
+    $total = $examFeeTotal($examName, ($data['class'] ?? null) ?: null);
     $rows = Database::fetchAll(
         "SELECT id, student_user_id, amount, payment_method, will_pay_within, collected_by, collected_at
          FROM exam_fees WHERE year = ? AND exam_name = ?",
@@ -169,17 +167,20 @@ $router->post('/api/admin/exam-fees/status', function () use ($examFeeTotal) {
         $waivedBy[$uid] = ($waivedBy[$uid] ?? 0) + (float)$w['amount'];
     }
     $map = [];
-    foreach (array_unique(array_merge(array_keys($paidBy), array_keys($waivedBy))) as $uid) {
+    $uids = array_unique(array_merge(array_keys($paidBy), array_keys($waivedBy)));
+    $classOf = $uids ? array_column(Database::fetchAll("SELECT user_id, class FROM students WHERE user_id IN (" . implode(',', array_map('intval', $uids)) . ")"), 'class', 'user_id') : [];
+    foreach ($uids as $uid) {
         $paid = $paidBy[$uid] ?? 0.0;
         $waived = $waivedBy[$uid] ?? 0.0;
-        $due = $total > 0 ? max(0, $total - $paid - $waived) : 0.0;
+        $sTotal = $examFeeTotal($examName, $classOf[$uid] ?? null) ?: $total; // each student's own class fee
+        $due = $sTotal > 0 ? max(0, $sTotal - $paid - $waived) : 0.0;
         $map[$uid] = array_merge($meta[$uid] ?? [], [
             'paid' => count($paidBy) > 0 && isset($paidBy[$uid]),
             'paid_total' => $paid,
             'waived_total' => $waived,
-            'total_fee' => $total,
+            'total_fee' => $sTotal,
             'due' => $due,
-            'fully_paid' => $total > 0 ? ($paid + $waived >= $total) : isset($paidBy[$uid]),
+            'fully_paid' => $sTotal > 0 ? ($paid + $waived >= $sTotal) : isset($paidBy[$uid]),
             'will_pay_within' => $meta[$uid]['will_pay_within'] ?? null,
         ]);
     }

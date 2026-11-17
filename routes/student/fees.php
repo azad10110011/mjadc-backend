@@ -35,7 +35,7 @@ $router->post('/api/student/pay-fee', function () {
     }
 
     $fee = Database::fetch(
-        "SELECT tf.*, s.name as student_name, s.student_id 
+        "SELECT tf.*, tf.student_id AS sid, s.name as student_name, s.student_id AS student_code
          FROM tuition_fees tf 
          JOIN students s ON tf.student_id = s.id 
          WHERE tf.id = ? AND s.user_id = ?",
@@ -55,9 +55,10 @@ $router->post('/api/student/pay-fee', function () {
     $transactionId = 'TXN' . time() . rand(1000, 9999);
     Database::insert('payments', [
         'transaction_id' => $transactionId,
-        'student_id' => $fee['student_id'],
+        'student_id' => (int)$fee['sid'],
         'amount' => $outstanding,
         'payment_type' => 'tuition_fee',
+        'fee_type' => $fee['fee_type'] ?? 'Tuition Fee',
         'month_paid' => $fee['month'],
         'year_paid' => $fee['year'],
         'status' => 'pending',
@@ -67,7 +68,7 @@ $router->post('/api/student/pay-fee', function () {
         'transaction_id' => $transactionId,
         'amount' => $outstanding,
         'student_name' => $fee['student_name'],
-        'student_id' => $fee['student_id'],
+        'student_id' => $fee['student_code'],
         'payment_url' => 'https://sandbox.sonalibank.com.bd/api/payment/initiate',
     ], 'Redirecting to payment gateway');
 });

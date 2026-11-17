@@ -2,7 +2,7 @@
 
 // POST /api/admin/transcript – generate student transcripts (admin & exam_controller)
 $router->post('/api/admin/transcript', function () {
-    Auth::requireAnyRole(['admin', 'exam_controller']);
+    $user = Auth::requireAnyRole(['admin', 'exam_controller']);
 
     $data = json_decode(file_get_contents('php://input'), true);
     $year = $data['year'] ?? '';
@@ -38,6 +38,20 @@ $router->post('/api/admin/transcript', function () {
         $transcripts[] = $t;
     }
 
+    // Session 100: marksheets of students held for unpaid fees are left out (admin may include them)
+    $isAdmin = in_array('admin', array_map('strval', (array)($user['roles'] ?? [])), true) || ($user['role'] ?? '') === 'admin';
+    $includeHeld = $isAdmin && !empty($data['include_held']);
+    $heldIds = [];
+    if (duesSettings()['result_hold'] !== 'none' && $transcripts) {
+        $codes = array_map(fn($t) => (string)$t['student_id'], $transcripts);
+        $rows = Database::fetchAll("SELECT id, user_id, class, student_id FROM students WHERE student_id IN (" . implode(',', array_fill(0, count($codes), '?')) . ")", $codes);
+        $dues = duesStatusFor($rows, (int)$exam['year'], (string)$exam['exam_name']);
+        foreach ($rows as $r) if (duesHeld($dues[(int)$r['id']] ?? null)) $heldIds[(string)$r['student_id']] = true;
+        foreach ($transcripts as &$t) $t['held'] = isset($heldIds[(string)$t['student_id']]);
+        unset($t);
+        if (!$includeHeld) $transcripts = array_values(array_filter($transcripts, fn($t) => empty($t['held'])));
+    }
+
     // QR verification: signed token per student+exam, and whether admin enabled online verify.
     // Wrapped so a missing table/secret never breaks transcript generation itself.
     try {
@@ -52,7 +66,8 @@ $router->post('/api/admin/transcript', function () {
         error_log('transcript verify meta failed: ' . $e->getMessage());
     }
 
-    Response::success($transcripts);
+    $n = count($heldIds);
+    Response::success($transcripts, $n ? ($includeHeld ? "$n student(s) have unpaid fees (marked HELD) — included because you chose to" : "$n student(s) left out: result on hold for unpaid fees (" . implode(', ', array_slice(array_keys($heldIds), 0, 12)) . ($n > 12 ? ' …' : '') . ')') : 'Success');
 });
 
 /**

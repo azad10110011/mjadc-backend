@@ -113,6 +113,10 @@ $router->post('/api/admin/users', function () {
         }
     }
 
+    // Session 102: panel tasks chosen on the form (unticked role tasks → removed for this user)
+    if (isset($data['disabled_features']) && is_array($data['disabled_features']) && $userId) {
+        Permissions::applyPanelTasks((int)$userId, $data['disabled_features'], (int)(Auth::getUser()['id'] ?? 0));
+    }
     Response::created(['id' => $userId], 'User created');
 });
 
@@ -184,6 +188,10 @@ $router->put('/api/admin/users/{id}', function (array $params) {
             }
         }
 
+        // Session 102: panel tasks chosen on the form (unticked role tasks → removed for this user)
+        if (isset($data['disabled_features']) && is_array($data['disabled_features']) && $params['id']) {
+            Permissions::applyPanelTasks((int)$params['id'], $data['disabled_features'], (int)(Auth::getUser()['id'] ?? 0));
+        }
         Response::success(null, 'User updated');
     } catch (\Throwable $e) {
         Response::error('Failed to update user: ' . $e->getMessage(), 500);

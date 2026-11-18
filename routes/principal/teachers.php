@@ -17,12 +17,13 @@ $router->post('/api/principal/teachers', function () {
         Response::validationError($validator->errors());
     }
 
-    // Create user account
-    $tempPassword = Auth::hashPassword('password123');
+    // Create user account (Session 112: random temp password, forced change on first login)
+    [$pwHash, $mustChange, $tempPw] = newAccountPassword($data['password'] ?? null);
     $userId = Database::insert('users', [
         'name' => $data['name'],
         'email' => $data['email'],
-        'password_hash' => $tempPassword,
+        'password_hash' => $pwHash,
+        'must_change_password' => $mustChange,
         'gender' => $data['gender'],
         'date_of_birth' => $data['date_of_birth'] ?? null,
         'default_role' => $data['default_role'] ?? null,
@@ -57,7 +58,7 @@ $router->post('/api/principal/teachers', function () {
         'mpo_index' => $data['mpo_index'] ?? null,
     ]);
 
-    Response::created(['id' => $teacherId, 'user_id' => $userId], 'Teacher added successfully');
+    Response::created(['id' => $teacherId, 'user_id' => $userId, 'temp_password' => $tempPw], $tempPw ? 'Teacher added. Temporary password: ' . $tempPw : 'Teacher added successfully');
 });
 
 // GET /api/principal/teachers

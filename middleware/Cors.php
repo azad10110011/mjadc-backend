@@ -4,13 +4,19 @@ class Cors
 {
     public static function handle(): void
     {
-        $allowedOrigins = ['http://localhost:3000', 'http://localhost:3001', 'https://mjadc.ac.bd'];
+        // Session 112: exact allow-list, and NO wildcard fallback. The production site runs on
+        // www.mjadc.ac.bd, so both hosts are listed; an unknown origin gets no CORS header at all.
+        $allowedOrigins = [
+            'http://localhost:3000',
+            'http://localhost:3001',
+            'https://mjadc.ac.bd',
+            'https://www.mjadc.ac.bd',
+        ];
         $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
 
-        if (in_array($origin, $allowedOrigins)) {
+        if (in_array($origin, $allowedOrigins, true)) {
             header("Access-Control-Allow-Origin: {$origin}");
-        } else {
-            header('Access-Control-Allow-Origin: *');
+            header('Vary: Origin');
         }
 
         header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');

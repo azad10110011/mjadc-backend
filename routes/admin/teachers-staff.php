@@ -60,10 +60,12 @@ $router->post('/api/admin/teachers-staff/teacher', function () {
             Response::validationError($validator->errors());
         }
 
+        [$pwHash, $mustChange, $tempPw] = newAccountPassword($data['password'] ?? null); // Session 112
         $userId = Database::insert('users', [
             'name' => $data['name'],
             'email' => $data['email'],
-            'password_hash' => Auth::hashPassword($data['password'] ?? 'password123'),
+            'password_hash' => $pwHash,
+            'must_change_password' => $mustChange,
             'gender' => $data['gender'],
             'date_of_birth' => $data['date_of_birth'] ?? null,
             'default_role' => $data['default_role'] ?? null,
@@ -112,7 +114,7 @@ $router->post('/api/admin/teachers-staff/teacher', function () {
         if (isset($data['disabled_features']) && is_array($data['disabled_features']) && $userId) {
             Permissions::applyPanelTasks((int)$userId, $data['disabled_features'], (int)(Auth::getUser()['id'] ?? 0));
         }
-        Response::created(['id' => $teacherId], 'Teacher added');
+        Response::created(['id' => $teacherId, 'temp_password' => $tempPw], $tempPw ? 'Teacher added. Temporary password: ' . $tempPw : 'Teacher added');
     } catch (\Throwable $e) {
         Response::error('Internal server error: ' . $e->getMessage(), 500);
     }
@@ -148,10 +150,12 @@ $router->put('/api/admin/teachers-staff/teacher/{id}', function (array $params) 
                 if ($existingUser) {
                     $userId = $existingUser['id'];
                 } else {
+                    [$pwHash, $mustChange] = newAccountPassword($data['password'] ?? null); // Session 112
                     $userId = Database::insert('users', [
                         'name' => $data['name'] ?? $teacher['name'],
                         'email' => $email,
-                        'password_hash' => Auth::hashPassword($data['password'] ?? 'password123'),
+                        'password_hash' => $pwHash,
+                        'must_change_password' => $mustChange,
                         'gender' => $data['gender'] ?? $teacher['gender'],
                         'date_of_birth' => $data['date_of_birth'] ?? null,
                     ]);
@@ -248,10 +252,12 @@ $router->post('/api/admin/teachers-staff/staff', function () {
             Response::validationError($validator->errors());
         }
 
+        [$pwHash, $mustChange, $tempPw] = newAccountPassword($data['password'] ?? null); // Session 112
         $userId = Database::insert('users', [
             'name' => $data['name'],
             'email' => $data['email'] ?? ($data['name'] . '@mjadc.ac.bd'),
-            'password_hash' => Auth::hashPassword($data['password'] ?? 'password123'),
+            'password_hash' => $pwHash,
+            'must_change_password' => $mustChange,
             'gender' => $data['gender'],
             'date_of_birth' => $data['date_of_birth'] ?? null,
             'default_role' => $data['default_role'] ?? null,
@@ -285,7 +291,7 @@ $router->post('/api/admin/teachers-staff/staff', function () {
         if (isset($data['disabled_features']) && is_array($data['disabled_features']) && $userId) {
             Permissions::applyPanelTasks((int)$userId, $data['disabled_features'], (int)(Auth::getUser()['id'] ?? 0));
         }
-        Response::created(['id' => $staffId], 'Staff added');
+        Response::created(['id' => $staffId, 'temp_password' => $tempPw], $tempPw ? 'Staff added. Temporary password: ' . $tempPw : 'Staff added');
     } catch (\Throwable $e) {
         Response::error('Internal server error: ' . $e->getMessage(), 500);
     }
@@ -321,10 +327,12 @@ $router->put('/api/admin/teachers-staff/staff/{id}', function (array $params) {
                 if ($existingUser) {
                     $userId = $existingUser['id'];
                 } else {
+                    [$pwHash, $mustChange] = newAccountPassword($data['password'] ?? null); // Session 112
                     $userId = Database::insert('users', [
                         'name' => $data['name'] ?? $record['name'],
                         'email' => $email,
-                        'password_hash' => Auth::hashPassword($data['password'] ?? 'password123'),
+                        'password_hash' => $pwHash,
+                        'must_change_password' => $mustChange,
                         'gender' => $data['gender'] ?? $record['gender'],
                         'date_of_birth' => $data['date_of_birth'] ?? null,
                     ]);

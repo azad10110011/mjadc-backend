@@ -98,11 +98,13 @@ $router->post('/api/admin/students', function () {
         Response::error('Student ID already exists', 409);
     }
 
-    // Create user account
+    // Create user account (Session 112: mobile is the first-login password; forced change after)
+    securityEnsureSchema();
     $userId = Database::insert('users', [
         'name' => $data['name'],
         'email' => $data['student_id'],
         'password_hash' => Auth::hashPassword($data['mobile']),
+        'must_change_password' => 1,
         'gender' => $data['gender'],
         'date_of_birth' => $data['date_of_birth'] ?? null,
     ]);

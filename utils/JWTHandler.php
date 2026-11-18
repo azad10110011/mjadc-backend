@@ -9,7 +9,15 @@ class JWTHandler
 {
     private static function getSecret(): string
     {
-        return $_ENV['JWT_SECRET'] ?? 'default-secret-key';
+        // Session 112: fail hard rather than silently signing tokens with a public constant.
+        $secret = $_ENV['JWT_SECRET'] ?? getenv('JWT_SECRET') ?: '';
+        if (strlen($secret) < 32) {
+            http_response_code(500);
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode(['status' => 500, 'message' => 'Server auth is misconfigured (JWT secret missing or too short)']);
+            exit;
+        }
+        return $secret;
     }
 
     private static function getExpiry(): int

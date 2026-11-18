@@ -33,21 +33,30 @@ $router->post('/api/admissions/apply', function () {
         'email' => $data['email'] ?? null,
     ]);
 
-    // Handle file uploads
+    // Handle file uploads (Session 112: allow-list + size limit on this PUBLIC endpoint)
     $uploadPath = __DIR__ . '/../../uploads/documents/';
+    $maxBytes = 5 * 1024 * 1024; // 5 MB
+    $okExt = function (string $name, array $allowed): ?string {
+        $e = strtolower(pathinfo($name, PATHINFO_EXTENSION));
+        return in_array($e, $allowed, true) ? $e : null;
+    };
 
     if (isset($_FILES['photo']) && $_FILES['photo']['error'] === UPLOAD_ERR_OK) {
-        $ext = pathinfo($_FILES['photo']['name'], PATHINFO_EXTENSION);
-        $filename = "admission_{$admissionId}_photo.{$ext}";
-        move_uploaded_file($_FILES['photo']['tmp_name'], $uploadPath . $filename);
-        Database::update('admissions', ['photo_path' => "uploads/documents/{$filename}"], 'id = ?', ['id' => $admissionId]);
+        $ext = $okExt($_FILES['photo']['name'], ['jpg', 'jpeg', 'png', 'webp']);
+        if ($ext && $_FILES['photo']['size'] <= $maxBytes && @getimagesize($_FILES['photo']['tmp_name'])) {
+            $filename = "admission_{$admissionId}_photo.{$ext}";
+            move_uploaded_file($_FILES['photo']['tmp_name'], $uploadPath . $filename);
+            Database::update('admissions', ['photo_path' => "uploads/documents/{$filename}"], 'id = ?', ['id' => $admissionId]);
+        }
     }
 
     if (isset($_FILES['certificate']) && $_FILES['certificate']['error'] === UPLOAD_ERR_OK) {
-        $ext = pathinfo($_FILES['certificate']['name'], PATHINFO_EXTENSION);
-        $filename = "admission_{$admissionId}_cert.{$ext}";
-        move_uploaded_file($_FILES['certificate']['tmp_name'], $uploadPath . $filename);
-        Database::update('admissions', ['certificate_path' => "uploads/documents/{$filename}"], 'id = ?', ['id' => $admissionId]);
+        $ext = $okExt($_FILES['certificate']['name'], ['pdf', 'jpg', 'jpeg', 'png', 'webp']);
+        if ($ext && $_FILES['certificate']['size'] <= $maxBytes) {
+            $filename = "admission_{$admissionId}_cert.{$ext}";
+            move_uploaded_file($_FILES['certificate']['tmp_name'], $uploadPath . $filename);
+            Database::update('admissions', ['certificate_path' => "uploads/documents/{$filename}"], 'id = ?', ['id' => $admissionId]);
+        }
     }
 
     Response::created([

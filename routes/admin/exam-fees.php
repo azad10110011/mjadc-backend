@@ -1,6 +1,7 @@
 <?php
 // Exam fee collection: partial payments, waivers, dues, will-pay-within, reports.
-// Roles: admin + exam_controller collect & waive; administration views own reports only.
+// Roles: admin + exam_controller collect & waive; administration collects via the Exam Fee Collection permission (Session 111).
+// Reports: admin / exam_controller see every collector; everyone else only their own collections.
 // QR verification remains in routes/public/exam-fee-verify.php (sums paid installments).
 
 // ---------------------------------------------------------------------------
@@ -53,7 +54,7 @@ $examFeeStatus = function (int $studentUserId, string $year, string $examName) u
 };
 
 // ---------------------------------------------------------------------------
-// POST /api/admin/exam-fees/collect â€” record a payment (admin / exam_controller)
+// POST /api/admin/exam-fees/collect - record a payment (admin / exam_controller; administration via permission)
 // Accepts partial payment: amount, will_pay_within (date), payment_method
 // ---------------------------------------------------------------------------
 $router->post('/api/admin/exam-fees/collect', function () use ($examFeeStatus) {

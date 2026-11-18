@@ -10,30 +10,38 @@ $router->post('/api/auth/login', function () {
         Response::validationError($validator->errors());
     }
 
+    $email = (string)$data['email'];
+    loginThrottleGuard($email); // Session 112: block while locked out (exits with 429)
+
     $user = Database::fetch(
-        "SELECT u.*, GROUP_CONCAT(ur.role) as roles 
-         FROM users u 
-         LEFT JOIN user_roles ur ON u.id = ur.user_id 
-         WHERE u.email = ? AND u.status = 'active' 
+        "SELECT u.*, GROUP_CONCAT(ur.role) as roles
+         FROM users u
+         LEFT JOIN user_roles ur ON u.id = ur.user_id
+         WHERE u.email = ? AND u.status = 'active'
          GROUP BY u.id",
-        [$data['email']]
+        [$email]
     );
 
     if (!$user) {
+        loginThrottleFail($email);
         Response::unauthorized('Invalid email or password');
     }
     if ($user['status'] === 'frozen') {
         Response::unauthorized('Your account is frozen. Contact the administrator.');
     }
     if (!Auth::verifyPassword($data['password'], $user['password_hash'])) {
+        loginThrottleFail($email);
         Response::unauthorized('Invalid email or password');
     }
+
+    loginThrottleReset($email); // Session 112: clear the counter on success
 
     $roles = $user['roles'] ? explode(',', $user['roles']) : [];
     $token = JWTHandler::generateToken((int)$user['id'], $user['email'], $roles);
 
     unset($user['password_hash']);
     $user['roles'] = $roles;
+    $user['must_change_password'] = (int)($user['must_change_password'] ?? 0); // Session 112
     $user['permissions'] = Permissions::effective($user); // Session 80: drives the dynamic sidebar
     $user['permission_keys'] = array_column(Permissions::catalog(), 'key'); // which pages are permission-controlled
 
@@ -47,6 +55,7 @@ $router->post('/api/auth/login', function () {
 $router->get('/api/auth/me', function () {
     $user = Auth::requireAuth();
     unset($user['password_hash']);
+    $user['must_change_password'] = (int)($user['must_change_password'] ?? 0); // Session 112
     $user['permissions'] = Permissions::effective($user); // Session 80: drives the dynamic sidebar
     $user['permission_keys'] = array_column(Permissions::catalog(), 'key'); // which pages are permission-controlled
     Response::success($user);
@@ -75,8 +84,15 @@ $router->post('/api/auth/change-password', function () {
         Response::error('Current password is incorrect', 401);
     }
 
+    // Session 112: a weak/blank new password is rejected, and the forced-change flag is cleared.
+    if (strlen((string)$data['new_password']) < 6) {
+        Response::validationError(['new_password' => 'New password must be at least 6 characters']);
+    }
+
+    securityEnsureSchema();
     Database::update('users', [
-        'password_hash' => Auth::hashPassword($data['new_password'])
+        'password_hash' => Auth::hashPassword($data['new_password']),
+        'must_change_password' => 0,
     ], 'id = ?', ['id' => $user['id']]);
 
     Response::success(null, 'Password changed successfully');

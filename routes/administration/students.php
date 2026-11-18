@@ -70,11 +70,13 @@ $router->post('/api/admin-panel/students', function () {
             Response::error('A user with this Student ID already exists', 409);
         }
 
-        // Create user account with student role
+        // Create user account with student role (Session 112: mobile is first-login password; forced change after)
+        securityEnsureSchema();
         $userId = Database::insert('users', [
             'name' => $data['name'],
             'email' => $data['student_id'],
             'password_hash' => Auth::hashPassword($data['mobile']),
+            'must_change_password' => 1,
             'gender' => $data['gender'],
             'date_of_birth' => $data['date_of_birth'] ?? null,
         ]);

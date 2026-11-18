@@ -20,7 +20,9 @@ $router->post('/api/admin/forms', function () {
     ]);
 
     if (isset($_FILES['pdf']) && $_FILES['pdf']['error'] === UPLOAD_ERR_OK) {
-        $ext = pathinfo($_FILES['pdf']['name'], PATHINFO_EXTENSION);
+        $ext = strtolower(pathinfo($_FILES['pdf']['name'], PATHINFO_EXTENSION)); // Session 112: PDF only, 10 MB
+        if ($ext !== 'pdf') Response::validationError(['pdf' => 'Only PDF files are allowed']);
+        if ($_FILES['pdf']['size'] > 10 * 1024 * 1024) Response::validationError(['pdf' => 'File must be 10 MB or smaller']);
         $filename = "form_{$formId}.{$ext}";
         move_uploaded_file($_FILES['pdf']['tmp_name'], __DIR__ . "/../../uploads/forms/{$filename}");
         Database::update('downloadable_forms', ['pdf_path' => "uploads/forms/{$filename}"], 'id = ?', ['id' => $formId]);

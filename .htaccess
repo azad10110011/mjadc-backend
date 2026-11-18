@@ -9,9 +9,9 @@ RewriteCond %{REQUEST_FILENAME} !-f
 RewriteCond %{REQUEST_FILENAME} !-d
 RewriteRule ^(.*)$ index.php [QSA,L]
 
-# Deny access to sensitive files
-<FilesMatch "\.(env|json|lock|md)$">
-    Deny from all
+# Deny access to sensitive files (Session 112: added archives, DB dumps, backups, scripts, ini)
+<FilesMatch "\.(env|json|lock|md|zip|tar|gz|tgz|rar|7z|sql|sqlite|db|bak|old|orig|swp|dist|ini|sh|log)$">
+    Require all denied
 </FilesMatch>
 
 # Deny directory listing

@@ -16,10 +16,12 @@ $router->post('/api/principal/staff', function () {
         Response::validationError($validator->errors());
     }
 
+    [$pwHash, $mustChange, $tempPw] = newAccountPassword($data['password'] ?? null); // Session 112
     $userId = Database::insert('users', [
         'name' => $data['name'],
         'email' => $data['email'] ?? ($data['name'] . '@mjadc.ac.bd'),
-        'password_hash' => Auth::hashPassword('password123'),
+        'password_hash' => $pwHash,
+        'must_change_password' => $mustChange,
         'gender' => $data['gender'],
         'date_of_birth' => $data['date_of_birth'] ?? null,
         'default_role' => $data['default_role'] ?? null,
@@ -49,7 +51,7 @@ $router->post('/api/principal/staff', function () {
         'mpo_index' => $data['mpo_index'] ?? null,
     ]);
 
-    Response::created(['id' => $staffId], 'Staff added successfully');
+    Response::created(['id' => $staffId, 'temp_password' => $tempPw], $tempPw ? 'Staff added. Temporary password: ' . $tempPw : 'Staff added successfully');
 });
 
 // GET /api/principal/staff

@@ -49,6 +49,7 @@ require_once __DIR__ . '/utils/Router.php';
 require_once __DIR__ . '/utils/Validator.php';
 require_once __DIR__ . '/utils/JWTHandler.php';
 require_once __DIR__ . '/utils/Dues.php'; // fee due status, mark-entry / result-hold rules (Session 100)
+require_once __DIR__ . '/utils/Security.php'; // login throttling, forced password change, temp passwords (Session 112)
 require_once __DIR__ . '/middleware/Cors.php';
 require_once __DIR__ . '/middleware/Auth.php';
 
@@ -168,6 +169,7 @@ require __DIR__ . '/routes/admin/board-exam.php'; // Board Exam Management: exam
 require __DIR__ . '/routes/admin/board-duty.php'; // Board exam hall duty + letters incl. external teachers (Session 99)
 require __DIR__ . '/routes/admin/student-photos.php'; // POST /api/admin/students/{id}/photo — bulk photo upload (Session 86)
 require __DIR__ . '/routes/admin/catalog.php'; // exam names + student groups catalog (Session 88)
+require __DIR__ . '/routes/admin/quick-access.php'; // dashboard Quick Access defaults + per-user lists (Session 110)
 require __DIR__ . '/routes/public/exam-fee-verify.php';
 
 // Dispatch

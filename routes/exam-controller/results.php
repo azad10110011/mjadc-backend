@@ -83,11 +83,13 @@ $router->post('/api/exam-controller/results/upload', function () {
 
         // Upsert
         $existing = Database::fetch(
-            "SELECT id FROM exam_results WHERE student_id = ? AND exam_id = ? AND subject = ?",
+            "SELECT id, status FROM exam_results WHERE student_id = ? AND exam_id = ? AND subject = ?",
             [$student['id'], $examId, $data['subject']]
         );
 
         if ($existing) {
+            // Session 113: don't overwrite rows past the EC's stage; keep the current status.
+            if (!resultCanEditMarks($user, (string)$existing['status'])) continue;
             Database::update('exam_results', [
                 'mcq' => $mcq,
                 'cq' => $cq,
@@ -95,7 +97,6 @@ $router->post('/api/exam-controller/results/upload', function () {
                 'total' => $total,
                 'grade' => $grade['grade'],
                 'gpa' => $grade['points'],
-                'status' => 'draft',
             ], 'id = ?', ['id' => $existing['id']]);
         } else {
             Database::insert('exam_results', [
@@ -108,7 +109,7 @@ $router->post('/api/exam-controller/results/upload', function () {
                 'total' => $total,
                 'grade' => $grade['grade'],
                 'gpa' => $grade['points'],
-                'status' => 'draft',
+                'status' => 'submitted', // EC-entered marks go straight into the EC review queue
                 'uploaded_by' => $user['id'],
             ]);
         }
@@ -153,7 +154,7 @@ $router->get('/api/exam-controller/results/pending', function () {
                 er.status, MIN(er.id) as result_group_id
          FROM exam_results er
          JOIN exams e ON er.exam_id = e.id
-         WHERE er.status = 'draft'
+         WHERE er.status = 'submitted'
          GROUP BY e.exam_name, er.subject, e.class, er.status
          ORDER BY e.exam_name, er.subject"
     );
@@ -168,6 +169,10 @@ $router->post('/api/exam-controller/results/approve/{id}', function (array $para
     $result = Database::fetch("SELECT * FROM exam_results WHERE id = ?", [$params['id']]);
     if (!$result) {
         Response::notFound('Result not found');
+    }
+    // Session 113: only a submitted row can be approved (never re-approve or downgrade a published one).
+    if ($result['status'] !== 'submitted') {
+        Response::error('Only submitted results can be approved (this one is ' . $result['status'] . ').', 409);
     }
 
     Database::update('exam_results', ['status' => 'approved', 'approved_by' => $user['id']], 'id = ?', ['id' => $params['id']]);
@@ -192,7 +197,7 @@ $router->post('/api/exam-controller/results/approve-batch', function () {
         'exam_results er JOIN exams e ON er.exam_id = e.id',
         ['er.status' => 'approved', 'er.approved_by' => $user['id']],
         'e.exam_name = ? AND er.subject = ? AND e.class = ? AND er.status = ?',
-        ['exam_name' => $examName, 'subject' => $subject, 'class' => $class, 'status' => 'draft']
+        ['exam_name' => $examName, 'subject' => $subject, 'class' => $class, 'status' => 'submitted'] // Session 113: approve submitted rows
     );
 
     Response::success(['updated' => $updated], "{$updated} results approved");
@@ -245,27 +250,26 @@ $router->put('/api/exam-controller/results/{id}', function (array $params) {
         Response::notFound('Result not found');
     }
 
-    if ($result['status'] === 'published') {
-        Response::forbidden('Cannot edit published results');
+    // Session 113: stage lock (EC may edit draft/submitted; approved/published are admin-only).
+    if (!resultCanEditMarks($user, (string)$result['status'])) {
+        Response::forbidden(resultLockReason((string)$result['status']));
     }
 
-    $partsData = $data['parts_data'] ?? [];
-    $lowerParts = [];
-    foreach ($partsData as $k => $v) $lowerParts[strtolower($k)] = $v;
-    $mcq = (float) ($lowerParts['mcq'] ?? $data['mcq'] ?? $result['mcq']);
-    $cq = (float) ($lowerParts['cq'] ?? $data['cq'] ?? $result['cq']);
-    $practical = (float) ($lowerParts['practical'] ?? $data['practical'] ?? $result['practical']);
-    $total = $mcq + $cq + $practical;
-    $grade = calculateGradeFromTotal($total);
+    // Recompute with the shared part-wise rule so EC edits match teacher/admin results.
+    $partsData = is_array($data['parts_data'] ?? null) ? $data['parts_data'] : [];
+    $absentIn = is_array($data['absent_in'] ?? null) ? $data['absent_in'] : (is_array(json_decode((string)$result['absent_in'], true)) ? json_decode((string)$result['absent_in'], true) : []);
+    if (empty($partsData)) {
+        // fall back to the row's own part data, overlaying any plain mcq/cq/practical sent
+        $partsData = is_array(json_decode((string)$result['parts_data'], true)) ? json_decode((string)$result['parts_data'], true) : [];
+        foreach (['mcq', 'cq', 'practical'] as $k) if (isset($data[$k])) $partsData[$k] = $data[$k];
+        if (empty($partsData)) $partsData = ['mcq' => $result['mcq'], 'cq' => $result['cq'], 'practical' => $result['practical']];
+    }
+    [$cq, $mcq, $practical, $total, $grade, $gpa, $partsJson, $absentJson] = resultComputeRow((string)$result['subject'], $partsData, $absentIn);
 
-    Database::update('exam_results', [
-        'mcq' => $mcq,
-        'cq' => $cq,
-        'practical' => $practical,
-        'total' => $total,
-        'grade' => $grade['grade'],
-        'gpa' => $grade['points'],
-    ], 'id = ?', ['id' => $params['id']]);
+    Database::query(
+        "UPDATE exam_results SET cq = ?, mcq = ?, practical = ?, total = ?, grade = ?, gpa = ?, parts_data = ?, absent_in = ? WHERE id = ?",
+        [$cq, $mcq, $practical, $total, $grade, $gpa, $partsJson, $absentJson, $params['id']]
+    );
 
-    Response::success(null, 'Result updated');
+    Response::success(['grade' => $grade, 'gpa' => $gpa, 'total' => $total], 'Result updated');
 });

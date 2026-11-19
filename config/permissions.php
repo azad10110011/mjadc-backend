@@ -48,6 +48,7 @@ return [
     ['key' => '/p_Xk7mN/custom-fields', 'label' => 'Custom Entry Fields', 'group' => 'Admin', 'roles' => [], 'apis' => ['* /api/admin/custom-fields']],
     ['key' => '/p_Xk7mN/subjects', 'label' => 'Subjects', 'group' => 'Admin', 'roles' => [], 'apis' => ['* /api/admin/subjects', '* /api/admin/subject-parts']],
     ['key' => '/p_Xk7mN/user-history', 'label' => 'User History', 'group' => 'Admin', 'roles' => [], 'apis' => ['GET /api/admin/changelog']],
+    ['key' => '/p_Xk7mN/update-history', 'label' => 'Update History (all changes, restore)', 'group' => 'Admin', 'roles' => [], 'apis' => ['* /api/admin/audit'], 'grantable' => false], // Session 121: admin only
     ['key' => '/p_Xk7mN/routines', 'label' => 'Routines', 'group' => 'Admin', 'roles' => [], 'apis' => ['* /api/admin/routines']],
     ['key' => '/p_Xk7mN/syllabus', 'label' => 'Syllabus', 'group' => 'Admin', 'roles' => [], 'apis' => ['* /api/admin/syllabus']],
     ['key' => '/p_Xk7mN/teachers', 'label' => 'Teachers', 'group' => 'Admin', 'roles' => [], 'apis' => ['* /api/admin/teachers-staff/teacher', 'GET /api/admin/teachers-staff/teachers']],
@@ -55,7 +56,7 @@ return [
     ['key' => '/p_Xk7mN/students', 'label' => 'All Students', 'group' => 'Admin › Student Management', 'roles' => [], 'apis' => ['* /api/admin/students']],
     ['key' => '/p_Xk7mN/students/add', 'label' => 'Add Student', 'group' => 'Admin › Student Management', 'roles' => [], 'apis' => ['GET /api/admin/students', 'POST /api/admin/students', 'GET /api/admin/custom-fields']],
     ['key' => '/p_Xk7mN/students/photos', 'label' => 'Bulk Photo Upload', 'group' => 'Admin › Student Management', 'roles' => [], 'apis' => ['GET /api/admin/students', 'POST /api/admin/students']],
-    ['key' => '/p_Xk7mN/class-change', 'label' => 'Class Change', 'group' => 'Admin › Student Management', 'roles' => [], 'apis' => ['POST /api/admin/students/bulk-change-class']],
+    ['key' => '/p_Xk7mN/class-change', 'label' => 'Bulk Class Change', 'group' => 'Admin › Student Management', 'roles' => [], 'apis' => ['POST /api/admin/students/bulk-change-class'], 'grantable' => false], // Session 119: admin only
     ['key' => '/p_Xk7mN/student-info', 'label' => 'Student Info', 'group' => 'Admin › Student Management', 'roles' => [], 'apis' => ['* /api/admin/student-info']],
     ['key' => '/p_Xk7mN/governing-body', 'label' => 'Governing Body', 'group' => 'Admin', 'roles' => [], 'apis' => ['* /api/admin/governing-body']],
     ['key' => '/p_Xk7mN/principals', 'label' => 'Principal & Vice-Principal', 'group' => 'Admin', 'roles' => [], 'apis' => ['* /api/admin/principals', '* /api/admin/settings/principal_font']],
@@ -81,6 +82,8 @@ return [
 
     // ---------------- Teacher ----------------
     ['key' => '/p_R2t9b/upload-result', 'label' => 'Upload Result', 'group' => 'Teacher', 'roles' => ['teacher'], 'apis' => ['* /api/teacher/results']],
+    ['key' => '/p_R2t9b/result-images', 'label' => 'Result Image Upload (app)', 'group' => 'Teacher', 'roles' => ['teacher'], 'apis' => ['* /api/result-images']], // Session 123
+    ['key' => '/p_Xk7mN/result-images', 'label' => 'Result Images (view all)', 'group' => 'Admin › Internal Exam Management', 'roles' => ['exam_controller'], 'apis' => ['GET /api/result-images']], // Session 123
     ['key' => '/p_R2t9b/update-result', 'label' => 'Update Result', 'group' => 'Teacher', 'roles' => ['teacher'], 'apis' => ['* /api/teacher/results', 'GET /api/teacher/subjects']],
     ['key' => '/p_R2t9b/attendance', 'label' => 'Attendance', 'group' => 'Teacher', 'roles' => ['teacher'], 'apis' => ['* /api/teacher/attendance', 'GET /api/teacher/subjects']],
     ['key' => '/p_R2t9b/leave-management', 'label' => 'Leave Management', 'group' => 'Teacher', 'roles' => ['teacher'], 'apis' => ['* /api/teacher/leave']],
@@ -109,6 +112,8 @@ return [
     ['key' => '/p_F7c2j/fee-collection', 'label' => 'Fee Collection', 'group' => 'Administration', 'roles' => ['administration'], 'apis' => ['* /api/admin-panel/fees']],
     ['key' => '/p_F7c2j/collected-summary', 'label' => 'Collected Summary', 'group' => 'Administration', 'roles' => ['administration'], 'apis' => ['GET /api/admin-panel/fees/collected-summary']],
     ['key' => '/p_F7c2j/students', 'label' => 'All Students', 'group' => 'Administration › Student Management', 'roles' => ['administration'], 'apis' => ['* /api/admin/students']],
+    ['key' => '/p_F7c2j/student-images', 'label' => 'Student Images (view)', 'group' => 'Administration › Student Management', 'roles' => ['administration'], 'apis' => ['GET /api/student-docs']], // Session 123
+    ['key' => '/p_F7c2j/student-images#upload', 'label' => 'Student Images (upload in the app)', 'group' => 'Administration › Student Management', 'roles' => ['administration'], 'apis' => ['POST /api/student-docs']], // Session 123
     ['key' => '/p_F7c2j/students/add', 'label' => 'Add Student', 'group' => 'Administration › Student Management', 'roles' => ['administration'], 'apis' => ['GET /api/admin/students', 'POST /api/admin/students', 'GET /api/admin/custom-fields']],
     ['key' => '/p_F7c2j/forms', 'label' => 'Forms', 'group' => 'Administration', 'roles' => ['administration'], 'apis' => ['* /api/admin-panel/forms']],
 

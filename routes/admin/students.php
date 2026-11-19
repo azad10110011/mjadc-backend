@@ -111,7 +111,7 @@ $router->post('/api/admin/students', function () {
     Database::insert('user_roles', ['user_id' => $userId, 'role' => 'student']);
 
     $maxSort = Database::fetch("SELECT COALESCE(MAX(sort_order), 0) + 1 as next FROM students");
-    $studentId = Database::insert('students', [
+    $studentId = Database::insert('students', subjectNormalizeStudentRow([
         'user_id' => $userId,
         'student_id' => $data['student_id'],
         'name' => $data['name'],
@@ -141,9 +141,54 @@ $router->post('/api/admin/students', function () {
         // multipart sends custom_fields as a JSON string; accept both string and array
         'custom_fields' => isset($data['custom_fields']) ? json_encode(is_string($data['custom_fields']) ? json_decode($data['custom_fields'], true) : $data['custom_fields']) : null,
         'sort_order' => $maxSort['next'],
-    ]);
+    ]));
 
     Response::created(['id' => $studentId, 'user_id' => $userId], 'Student created');
+});
+
+// Session 119: these two must be registered BEFORE POST /api/admin/students/{id} — the router takes the
+// first match, so {id} used to swallow "reorder" and "bulk-change-class" (neither ever ran).
+// POST /api/admin/students/reorder â€“ batch reorder students
+$router->post('/api/admin/students/reorder', function () {
+    Auth::requireRole('admin');
+    $data = json_decode(file_get_contents('php://input'), true);
+    $ids = $data['ids'] ?? [];
+    if (!is_array($ids) || empty($ids)) Response::validationError(['ids' => 'ids array required']);
+    foreach ($ids as $i => $id) {
+        Database::update('students', ['sort_order' => $i + 1], 'id = ?', ['id' => (int)$id]);
+    }
+    Response::success(null, 'Reordered');
+});
+
+// POST /api/admin/students/bulk-change-class â€“ change class for selected students, or all students of a class
+$router->post('/api/admin/students/bulk-change-class', function () {
+    $user = Auth::requireRole('admin');
+    // Session 119: admin accounts only. requireRole() also lets in non-admins whose permissions cover
+    // the URL (e.g. Administration "All Students" = "* /api/admin/students"), so check the role itself.
+    if (!in_array('admin', (array)($user['roles'] ?? []), true)) {
+        Response::forbidden('Only an admin can change classes in bulk.');
+    }
+    $data = json_decode(file_get_contents('php://input'), true);
+    $toClass = $data['to_class'] ?? '';
+    $studentIds = $data['student_ids'] ?? null; // array of ids = selected students; null = whole class
+    $fromClass = $data['from_class'] ?? '';
+    if (!$toClass) Response::validationError(['to_class' => 'to_class required']);
+
+    if (is_array($studentIds) && count($studentIds) > 0) {
+        // Selected mode â€” move only the given students
+        $ids = array_map('intval', $studentIds);
+        $placeholders = implode(',', array_fill(0, count($ids), '?'));
+        $affected = Database::query("UPDATE students SET class = ? WHERE id IN ($placeholders)", array_merge([$toClass], $ids))->rowCount();
+        Response::success(['affected' => (int)$affected], "Moved $affected student(s) to $toClass");
+    } else {
+        // Whole-class mode
+        if (!$fromClass) Response::validationError(['from_class' => 'from_class required (or provide student_ids)']);
+        if ($fromClass === $toClass) Response::error('Source and target class are the same', 400);
+        $count = Database::fetch("SELECT COUNT(*) as cnt FROM students WHERE class = ?", [$fromClass])['cnt'];
+        if ($count == 0) Response::error('No students found in source class', 400);
+        Database::query("UPDATE students SET class = ? WHERE class = ?", [$toClass, $fromClass]);
+        Response::success(['affected' => (int)$count], "Moved $count students from $fromClass to $toClass");
+    }
 });
 
 // POST /api/admin/students/{id} (using POST for multipart support with PHP built-in server)
@@ -199,7 +244,7 @@ $router->post('/api/admin/students/{id}', function (array $params) {
     }
 
     if (!empty($updateData)) {
-        Database::update('students', $updateData, 'id = ?', ['id' => $params['id']]);
+        Database::update('students', subjectNormalizeStudentRow($updateData), 'id = ?', ['id' => $params['id']]);
     }
 
     Response::success(null, 'Student updated');
@@ -258,7 +303,7 @@ $router->put('/api/admin/students/{id}', function (array $params) {
     }
 
     if (!empty($updateData)) {
-        Database::update('students', $updateData, 'id = ?', ['id' => $params['id']]);
+        Database::update('students', subjectNormalizeStudentRow($updateData), 'id = ?', ['id' => $params['id']]);
     }
 
     Response::success(null, 'Student updated');
@@ -333,43 +378,6 @@ $router->post('/api/admin/students/{id}/move-down', function (array $params) {
     Response::success(null, 'Reordered');
 });
 
-// POST /api/admin/students/reorder â€“ batch reorder students
-$router->post('/api/admin/students/reorder', function () {
-    Auth::requireRole('admin');
-    $data = json_decode(file_get_contents('php://input'), true);
-    $ids = $data['ids'] ?? [];
-    if (!is_array($ids) || empty($ids)) Response::validationError(['ids' => 'ids array required']);
-    foreach ($ids as $i => $id) {
-        Database::update('students', ['sort_order' => $i + 1], 'id = ?', ['id' => (int)$id]);
-    }
-    Response::success(null, 'Reordered');
-});
-
-// POST /api/admin/students/bulk-change-class â€“ change class for selected students, or all students of a class
-$router->post('/api/admin/students/bulk-change-class', function () {
-    Auth::requireRole('admin');
-    $data = json_decode(file_get_contents('php://input'), true);
-    $toClass = $data['to_class'] ?? '';
-    $studentIds = $data['student_ids'] ?? null; // array of ids = selected students; null = whole class
-    $fromClass = $data['from_class'] ?? '';
-    if (!$toClass) Response::validationError(['to_class' => 'to_class required']);
-
-    if (is_array($studentIds) && count($studentIds) > 0) {
-        // Selected mode â€” move only the given students
-        $ids = array_map('intval', $studentIds);
-        $placeholders = implode(',', array_fill(0, count($ids), '?'));
-        $affected = Database::query("UPDATE students SET class = ? WHERE id IN ($placeholders)", array_merge([$toClass], $ids));
-        Response::success(['affected' => (int)$affected], "Moved $affected student(s) to $toClass");
-    } else {
-        // Whole-class mode
-        if (!$fromClass) Response::validationError(['from_class' => 'from_class required (or provide student_ids)']);
-        if ($fromClass === $toClass) Response::error('Source and target class are the same', 400);
-        $count = Database::fetch("SELECT COUNT(*) as cnt FROM students WHERE class = ?", [$fromClass])['cnt'];
-        if ($count == 0) Response::error('No students found in source class', 400);
-        Database::query("UPDATE students SET class = ? WHERE class = ?", [$toClass, $fromClass]);
-        Response::success(['affected' => (int)$count], "Moved $count students from $fromClass to $toClass");
-    }
-});
 
 
 

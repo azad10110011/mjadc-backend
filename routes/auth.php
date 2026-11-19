@@ -13,14 +13,23 @@ $router->post('/api/auth/login', function () {
     $email = (string)$data['email'];
     loginThrottleGuard($email); // Session 112: block while locked out (exits with 429)
 
-    $user = Database::fetch(
-        "SELECT u.*, GROUP_CONCAT(ur.role) as roles
-         FROM users u
-         LEFT JOIN user_roles ur ON u.id = ur.user_id
-         WHERE u.email = ? AND u.status = 'active'
-         GROUP BY u.id",
-        [$email]
-    );
+    // Session 116: students may be stored as the bare Student ID or as "<id>@student.mjadc.local";
+    // accept either form so the student page and the mobile app login both work.
+    $candidates = [$email];
+    if (preg_match('/^(.+)@student\.mjadc\.local$/i', $email, $mm)) $candidates[] = $mm[1];
+    elseif (strpos($email, '@') === false) $candidates[] = $email . '@student.mjadc.local';
+    $user = null;
+    foreach ($candidates as $cand) {
+        $user = Database::fetch(
+            "SELECT u.*, GROUP_CONCAT(ur.role) as roles
+             FROM users u
+             LEFT JOIN user_roles ur ON u.id = ur.user_id
+             WHERE u.email = ? AND u.status = 'active'
+             GROUP BY u.id",
+            [$cand]
+        );
+        if ($user) break;
+    }
 
     if (!$user) {
         loginThrottleFail($email);
@@ -37,7 +46,9 @@ $router->post('/api/auth/login', function () {
     loginThrottleReset($email); // Session 112: clear the counter on success
 
     $roles = $user['roles'] ? explode(',', $user['roles']) : [];
-    $token = JWTHandler::generateToken((int)$user['id'], $user['email'], $roles);
+    // Session 116: the mobile apps ask for a long-lived session ("client":"app").
+    $client = (($data['client'] ?? '') === 'app') ? 'app' : 'web';
+    $token = JWTHandler::generateToken((int)$user['id'], $user['email'], $roles, $client, (string)$user['password_hash']);
 
     unset($user['password_hash']);
     $user['roles'] = $roles;
@@ -54,11 +65,23 @@ $router->post('/api/auth/login', function () {
 // GET /api/auth/me
 $router->get('/api/auth/me', function () {
     $user = Auth::requireAuth();
-    unset($user['password_hash']);
+    unset($user['password_hash'], $user['_token_client'], $user['_token_iat']);
     $user['must_change_password'] = (int)($user['must_change_password'] ?? 0); // Session 112
     $user['permissions'] = Permissions::effective($user); // Session 80: drives the dynamic sidebar
     $user['permission_keys'] = array_column(Permissions::catalog(), 'key'); // which pages are permission-controlled
     Response::success($user);
+});
+
+// POST /api/auth/refresh  (Session 116)
+// Returns a fresh token of the same kind. The mobile apps call it now and then, so an app session
+// (1 year) keeps renewing and the user is never signed out while they keep using the app.
+$router->post('/api/auth/refresh', function () {
+    $user = Auth::requireAuth();
+    $token = JWTHandler::generateToken(
+        (int)$user['id'], (string)$user['email'], (array)$user['roles'],
+        (string)$user['_token_client'], (string)$user['password_hash']
+    );
+    Response::success(['token' => $token], 'Session renewed');
 });
 
 // POST /api/auth/logout
@@ -90,12 +113,15 @@ $router->post('/api/auth/change-password', function () {
     }
 
     securityEnsureSchema();
+    $newHash = Auth::hashPassword($data['new_password']);
     Database::update('users', [
-        'password_hash' => Auth::hashPassword($data['new_password']),
+        'password_hash' => $newHash,
         'must_change_password' => 0,
     ], 'id = ?', ['id' => $user['id']]);
 
-    Response::success(null, 'Password changed successfully');
+    // Session 116: the new password ends every other session; this device gets a fresh token.
+    $token = JWTHandler::generateToken((int)$user['id'], (string)$user['email'], (array)$user['roles'], (string)$user['_token_client'], $newHash);
+    Response::success(['token' => $token], 'Password changed successfully');
 });
 
 // POST /api/auth/reset-password

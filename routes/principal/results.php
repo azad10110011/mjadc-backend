@@ -91,7 +91,7 @@ $router->post('/api/principal/results/back-to-exam-controller', function () {
     }
     $stmt = Database::query(
         "UPDATE exam_results er JOIN students s ON s.id = er.student_id
-         SET er.status = 'draft'
+         SET er.status = 'submitted', er.approved_by = NULL
          WHERE er.exam_id = ? AND er.status = 'approved' AND (? = '' OR er.subject = ?) AND (? = '' OR s.student_group = ?)",
         [$exam['id'], $subject, $subject, $group, $group]
     );

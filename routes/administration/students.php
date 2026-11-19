@@ -83,7 +83,7 @@ $router->post('/api/admin-panel/students', function () {
         Database::insert('user_roles', ['user_id' => $userId, 'role' => 'student']);
 
         // Create student record
-        $studentId = Database::insert('students', [
+        $studentId = Database::insert('students', subjectNormalizeStudentRow([
             'user_id' => $userId,
             'student_id' => $data['student_id'],
             'name' => $data['name'],
@@ -112,7 +112,7 @@ $router->post('/api/admin-panel/students', function () {
             'photo_path' => $data['photo_path'] ?? null,
             // custom entry fields (Bangla names etc.) â€” accept string or array
             'custom_fields' => isset($data['custom_fields']) ? json_encode(is_string($data['custom_fields']) ? json_decode($data['custom_fields'], true) : $data['custom_fields']) : null,
-        ]);
+        ]));
 
         Response::created(['id' => $studentId, 'user_id' => $userId], 'Student created');
     } catch (\Exception $e) {
@@ -185,7 +185,7 @@ $router->post('/api/admin-panel/students/{id}', function (array $params) {
     }
 
     if (!empty($updateData)) {
-        Database::update('students', $updateData, 'id = ?', ['id' => $params['id']]);
+        Database::update('students', subjectNormalizeStudentRow($updateData), 'id = ?', ['id' => $params['id']]);
     }
 
     Response::success(null, 'Student updated');

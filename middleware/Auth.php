@@ -27,8 +27,19 @@ class Auth
             if (!$user) {
                 return null;
             }
+            // Session 116: a token issued before the password last changed is no longer valid.
+            // (Tokens from before this change carry no stamp and are accepted until they expire.)
+            if (isset($decoded->pws) && !hash_equals(JWTHandler::passwordStamp((string)$user['password_hash']), (string)$decoded->pws)) {
+                return null;
+            }
 
             $user['roles'] = $user['roles'] ? explode(',', $user['roles']) : [];
+            // Session 121: changes made in this request are recorded under this user in Update History
+            if (function_exists('auditSetUser')) {
+                try { auditSetUser($user); auditPeriodicSync(); } catch (\Throwable $e) { /* never block the request */ }
+            }
+            $user['_token_client'] = (string)($decoded->client ?? 'web');
+            $user['_token_iat'] = (int)($decoded->iat ?? 0);
             return $user;
         } catch (\Exception $e) {
             return null;

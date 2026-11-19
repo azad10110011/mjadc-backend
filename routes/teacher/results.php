@@ -22,6 +22,8 @@ function teacherResultCanonicalize(string $name): string
         'ict' => 'ict',
         'information and communication technology' => 'ict',
         'information & communication technology' => 'ict',
+        'information and communications technology' => 'ict', // official name (Session 124)
+        'information & communications technology' => 'ict',
         'physics' => 'physics',
         'chemistry' => 'chemistry',
         'biology' => 'biology',
@@ -53,6 +55,7 @@ function teacherResultPartsCandidates(string $subjectName, ?string $paperName): 
     }
     $candidates[] = $subjectName;
     if (teacherResultSameSubject($subjectName, 'ICT')) {
+        $candidates[] = 'Information and Communications Technology'; // official name (Session 124), older spellings below
         $candidates[] = 'ICT';
         $candidates[] = 'Information and Communication Technology';
     }
@@ -109,15 +112,32 @@ function teacherResultGetConfiguredItems(int $year, string $class, string $examN
     }
 
     $items = [];
+    // Session 124: a subject with no paper or only ONE paper is listed by its MAIN name, with the subject's
+    // code (or that paper's code). The stored result key (subject - paper) is unchanged.
+    $paperCount = function (int $sid): int {
+        static $cache = [];
+        if (!isset($cache[$sid])) $cache[$sid] = (int)(Database::fetch("SELECT COUNT(*) AS n FROM subject_papers WHERE parent_id = ?", [$sid])['n'] ?? 0);
+        return $cache[$sid];
+    };
+    // code of a subject's only paper (used when the subject itself has no code, e.g. ICT → 275)
+    $onlyPaperCode = function (int $sid): ?string {
+        $p = Database::fetchAll("SELECT code FROM subject_papers WHERE parent_id = ? LIMIT 2", [$sid]);
+        return count($p) === 1 ? ($p[0]['code'] ?: null) : null;
+    };
+    $mainLabel = function (array $c, ?string $paperCode) {
+        $code = ($c['subject_code'] ?? '') ?: ($paperCode ?? '');
+        return trim(($code ? $code . ' ' : '') . (function_exists('subjectCanonicalName') ? subjectCanonicalName((string)$c['subject_name']) : $c['subject_name']));
+    };
     foreach ($configs as $c) {
         $subjectId = (int)$c['subject_id'];
         $subjectName = (string)$c['subject_name'];
+        $singlePaper = $paperCount($subjectId) <= 1;
         $hasSelectedPaper = !empty($c['selected_paper_id']) && !empty($c['paper_name']);
 
         if ($hasSelectedPaper) {
             $items[] = [
                 'key' => teacherResultSelectionKey($subjectId, $c['selected_paper_id']),
-                'label' => trim(($c['paper_code'] ? $c['paper_code'] . ' ' : '') . $c['paper_name']),
+                'label' => $singlePaper ? $mainLabel($c, $c['paper_code']) : trim(($c['paper_code'] ? $c['paper_code'] . ' ' : '') . $c['paper_name']),
                 'subject_id' => $subjectId,
                 'subject_name' => $subjectName,
                 'paper_id' => (int)$c['selected_paper_id'],
@@ -136,7 +156,7 @@ function teacherResultGetConfiguredItems(int $year, string $class, string $examN
             foreach ($papers as $p) {
                 $items[] = [
                     'key' => teacherResultSelectionKey($subjectId, $p['id']),
-                    'label' => trim(($p['code'] ? $p['code'] . ' ' : '') . $p['name']),
+                    'label' => count($papers) <= 1 ? $mainLabel($c, $p['code']) : trim(($p['code'] ? $p['code'] . ' ' : '') . $p['name']),
                     'subject_id' => $subjectId,
                     'subject_name' => $subjectName,
                     'paper_id' => (int)$p['id'],
@@ -147,12 +167,12 @@ function teacherResultGetConfiguredItems(int $year, string $class, string $examN
             if (empty($papers)) {
                 $items[] = [
                     'key' => teacherResultSelectionKey($subjectId, null),
-                    'label' => trim(($c['subject_code'] ? $c['subject_code'] . ' ' : '') . $subjectName),
+                    'label' => $mainLabel($c, $onlyPaperCode($subjectId)),
                     'subject_id' => $subjectId,
                     'subject_name' => $subjectName,
                     'paper_id' => null,
                     'paper_name' => null,
-                    'code' => $c['subject_code'],
+                    'code' => $c['subject_code'] ?: $onlyPaperCode($subjectId),
                 ];
             }
             continue;
@@ -161,12 +181,12 @@ function teacherResultGetConfiguredItems(int $year, string $class, string $examN
         // Single selection without a paper row: whole subject (e.g. ICT)
         $items[] = [
             'key' => teacherResultSelectionKey($subjectId, null),
-            'label' => trim(($c['subject_code'] ? $c['subject_code'] . ' ' : '') . $subjectName),
+            'label' => $mainLabel($c, $onlyPaperCode($subjectId)),
             'subject_id' => $subjectId,
             'subject_name' => $subjectName,
             'paper_id' => null,
             'paper_name' => null,
-            'code' => $c['subject_code'],
+            'code' => $c['subject_code'] ?: $onlyPaperCode($subjectId),
         ];
     }
 
@@ -210,7 +230,7 @@ function teacherResultFetchClassStudents(string $class, string $group = ''): arr
  */
 function teacherResultTakesSubject(array $st, string $subjectName, ?string $paperName, bool $hasExistingResult = false): bool
 {
-    $compulsoryList = ['Bangla', 'English', 'ICT', 'Information and Communication Technology'];
+    $compulsoryList = ['Bangla', 'English', 'Information and Communications Technology', 'ICT', 'Information and Communication Technology'];
     foreach ($compulsoryList as $comp) {
         if (teacherResultSameSubject($subjectName, $comp)) {
             return true;
@@ -398,7 +418,7 @@ $router->get('/api/teacher/results/load-students', function () {
             $rows = Database::fetchAll(
                 "SELECT part_name, full_mark, pass_mark
                  FROM subject_parts
-                 WHERE subject IN ('ICT', 'Information and Communication Technology')
+                 WHERE subject IN ('ICT', 'Information and Communication Technology', 'Information and Communications Technology')
                  ORDER BY sort_order ASC, id ASC"
             );
         } else {
@@ -606,7 +626,7 @@ $router->post('/api/teacher/results/upload', function () {
         if (teacherResultSameSubject($candidate, 'ICT')) {
             $rows = Database::fetchAll(
                 "SELECT part_name, full_mark, pass_mark FROM subject_parts
-                 WHERE subject IN ('ICT', 'Information and Communication Technology')
+                 WHERE subject IN ('ICT', 'Information and Communication Technology', 'Information and Communications Technology')
                  ORDER BY sort_order ASC, id ASC"
             );
         } else {
@@ -632,6 +652,10 @@ $router->post('/api/teacher/results/upload', function () {
         foreach ($rows as $r) if (duesMatches($st[(int)$r['id']] ?? null, $markRule)) $allowedIds[(int)$r['id']] = true;
     }
     $skippedDue = 0;
+    $skippedLocked = 0; // Session 113: rows the uploader may no longer edit (already submitted/approved/published)
+    // New rows land at this stage: a teacher's entry starts as draft; an Exam Controller entering marks
+    // directly puts them straight into the EC review queue (submitted).
+    $newStatus = in_array('exam_controller', (array)($user['roles'] ?? []), true) ? 'submitted' : 'draft';
 
     $saved = 0;
     foreach ($marks as $m) {
@@ -701,36 +725,123 @@ $router->post('/api/teacher/results/upload', function () {
         }
 
         $existing = Database::fetch(
-            "SELECT id FROM exam_results WHERE exam_id = ? AND student_id = ? AND subject = ?",
+            "SELECT id, status FROM exam_results WHERE exam_id = ? AND student_id = ? AND subject = ?",
             [$examId, $student['id'], $subjectKey]
         );
+
+        // Session 113: never overwrite a row the uploader may no longer edit.
+        if ($existing && !resultCanEditMarks($user, (string)$existing['status'])) {
+            $skippedLocked++;
+            continue;
+        }
 
         $partsJson = !empty($partsData) ? json_encode($partsData) : null;
         $absentJson = !empty($absentIn) ? json_encode($absentIn) : null;
 
         if ($existing) {
+            // Keep the current workflow status; only the marks change.
             Database::query(
                 "UPDATE exam_results SET cq = ?, mcq = ?, practical = ?, total = ?, grade = ?, gpa = ?, parts_data = ?, absent_in = ? WHERE id = ?",
                 [$cq, $mcq, $practical, $total, $grade, $gpa, $partsJson, $absentJson, $existing['id']]
             );
         } else {
-            $columns = 'exam_id, student_id, subject, cq, mcq, practical, total, grade, gpa, parts_data, absent_in, uploaded_by';
-            $placeholders = '?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?';
-            $params = [$examId, $student['id'], $subjectKey, $cq, $mcq, $practical, $total, $grade, $gpa, $partsJson, $absentJson, $user['id']];
-            if ($status === 'draft') {
-                $columns .= ', status';
-                $placeholders .= ', ?';
-                $params[] = 'draft';
-            }
             Database::query(
-                "INSERT INTO exam_results ({$columns}) VALUES ({$placeholders})",
-                $params
+                "INSERT INTO exam_results (exam_id, student_id, subject, cq, mcq, practical, total, grade, gpa, parts_data, absent_in, status, uploaded_by)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                [$examId, $student['id'], $subjectKey, $cq, $mcq, $practical, $total, $grade, $gpa, $partsJson, $absentJson, $newStatus, $user['id']]
             );
         }
         $saved++;
     }
 
-    Response::success(['message' => 'Results uploaded successfully' . ($skippedDue ? " ($skippedDue student(s) skipped: fee rule)" : ''), 'saved_count' => $saved, 'skipped_due' => $skippedDue, 'subject_key' => $subjectKey]);
+    $notes = [];
+    if ($skippedDue) $notes[] = "$skippedDue skipped (fee rule)";
+    if ($skippedLocked) $notes[] = "$skippedLocked locked (already submitted/approved)";
+    Response::success([
+        'message' => 'Results saved' . ($notes ? ' — ' . implode(', ', $notes) : ''),
+        'saved_count' => $saved,
+        'skipped_due' => $skippedDue,
+        'skipped_locked' => $skippedLocked,
+        'subject_key' => $subjectKey,
+    ], 'Results saved');
+});
+
+// POST /api/teacher/results/submit  { year, class, exam_name, subject }  (Session 113)
+// Teacher submits their DRAFT rows for this exam+subject to the Exam Controller. Once submitted the
+// teacher can no longer edit them. Only the newest matching exam and the teacher's assigned subject.
+$router->post('/api/teacher/results/submit', function () {
+    $user = Auth::requireAnyRole(['teacher', 'exam_controller']);
+    $data = json_decode(file_get_contents('php://input'), true) ?: [];
+    $year = (int)($data['year'] ?? 0);
+    $class = trim((string)($data['class'] ?? ''));
+    $examName = trim((string)($data['exam_name'] ?? ''));
+    $subject = trim((string)($data['subject'] ?? ''));
+    if (!$year || !$class || !$examName || $subject === '') {
+        Response::validationError(['year, class, exam_name and subject are required']);
+    }
+
+    // A teacher may only submit subjects assigned to them.
+    $assigned = teacherResultAssignedSubjects($user);
+    if ($assigned !== null) {
+        $ok = false;
+        foreach ($assigned as $a) {
+            if (teacherResultSameSubject($a, $subject)) { $ok = true; break; }
+        }
+        if (!$ok) Response::forbidden('This subject is not assigned to you.');
+    }
+
+    $exam = Database::fetch(
+        "SELECT id FROM exams WHERE exam_name = ? AND class = ? AND year = ? ORDER BY id DESC LIMIT 1",
+        [$examName, $class, $year]
+    );
+    if (!$exam) Response::notFound('Exam not found');
+
+    // Match the subject itself and any of its papers ("Subject - Paper"); only draft rows move.
+    $stmt = Database::query(
+        "UPDATE exam_results SET status = 'submitted', submitted_by = ?
+         WHERE exam_id = ? AND status = 'draft' AND (subject = ? OR subject LIKE ?)",
+        [$user['id'], $exam['id'], $subject, $subject . ' - %']
+    );
+    $n = $stmt->rowCount();
+    Response::success(['submitted' => $n], $n > 0 ? "{$n} result(s) submitted to the Exam Controller" : 'Nothing to submit (already submitted or no draft marks).');
+});
+
+// PUT /api/teacher/results/update  { result_id, parts_data, absent_in }  (Session 113)
+// Edit one already-saved row. Server enforces the stage lock: a teacher can only edit draft rows,
+// an Exam Controller draft/submitted rows, an admin anything.
+$router->put('/api/teacher/results/update', function () {
+    $user = Auth::requireAnyRole(['teacher', 'exam_controller', 'admin']);
+    $data = json_decode(file_get_contents('php://input'), true) ?: [];
+    $resultId = (int)($data['result_id'] ?? 0);
+    if (!$resultId) Response::validationError(['result_id is required']);
+
+    $row = Database::fetch("SELECT * FROM exam_results WHERE id = ?", [$resultId]);
+    if (!$row) Response::notFound('Result not found');
+
+    if (!resultCanEditMarks($user, (string)$row['status'])) {
+        Response::forbidden(resultLockReason((string)$row['status']));
+    }
+
+    // A teacher may only edit subjects assigned to them.
+    $assigned = teacherResultAssignedSubjects($user);
+    if ($assigned !== null) {
+        $base = explode(' - ', (string)$row['subject'])[0];
+        $ok = false;
+        foreach ($assigned as $a) {
+            if (teacherResultSameSubject($a, $row['subject']) || teacherResultSameSubject($a, $base)) { $ok = true; break; }
+        }
+        if (!$ok) Response::forbidden('This subject is not assigned to you.');
+    }
+
+    $partsData = is_array($data['parts_data'] ?? null) ? $data['parts_data'] : [];
+    $absentIn = is_array($data['absent_in'] ?? null) ? $data['absent_in'] : [];
+    [$cq, $mcq, $practical, $total, $grade, $gpa, $partsJson, $absentJson] = resultComputeRow((string)$row['subject'], $partsData, $absentIn);
+
+    Database::query(
+        "UPDATE exam_results SET cq = ?, mcq = ?, practical = ?, total = ?, grade = ?, gpa = ?, parts_data = ?, absent_in = ? WHERE id = ?",
+        [$cq, $mcq, $practical, $total, $grade, $gpa, $partsJson, $absentJson, $resultId]
+    );
+    Response::success(['grade' => $grade, 'gpa' => $gpa, 'total' => $total], 'Result updated');
 });
 
 // GET /api/teacher/results/download

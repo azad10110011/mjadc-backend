@@ -11,6 +11,7 @@ class Cors
             'http://localhost:3001',
             'https://mjadc.ac.bd',
             'https://www.mjadc.ac.bd',
+            'https://localhost', // Session 116: the Android app (Capacitor) serves its pages from this origin
         ];
         $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
 
@@ -20,7 +21,8 @@ class Cors
         }
 
         header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
-        header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With');
+        // X-Client-Info: device details for Update History (Session 121)
+        header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, X-Client-Info');
         header('Access-Control-Max-Age: 86400');
         header('Content-Type: application/json; charset=utf-8');
 

@@ -6,6 +6,8 @@
 // Uses transcriptBuild()/transcriptMeritPositions() (routes/admin/transcript.php) so GPA, optional
 // subject, absent and fail rules are identical to the official transcript.
 // Only shown when ALL of the student's rows for that exam are published.
+// Session 115: summary only (GPA, or failed subjects) unless the admin turned ON QR verification
+// for this student + exam — then the full transcript is returned for viewing / downloading.
 
 $router->get('/api/student/results', function () {
     $user = Auth::requireRole('student');
@@ -62,13 +64,19 @@ $router->get('/api/student/results', function () {
         Response::notFound('No result found.');
     }
 
-    $failSubjects = [];
-    foreach ($mine['subjects'] as $s) {
-        if (empty($s['is_optional']) && strtoupper((string)$s['grade']) === 'F') $failSubjects[] = $s['subject'];
-    }
+    $failSubjects = resultFailSubjects($mine);
     $passed = strtoupper((string)$mine['overall_grade']) !== 'F';
 
-    Response::success([
+    // Session 115: by default a student sees only the summary — GPA when passed, the failed subject
+    // names when failed. The full transcript (all marks + downloadable copy) is unlocked only when the
+    // admin has turned ON online QR verification for this student + exam.
+    transcriptVerifyEnsureSchema();
+    $unlocked = (bool)Database::fetch(
+        "SELECT 1 FROM transcript_verifications WHERE student_id = ? AND exam_id = ?",
+        [$student['id'], $exam['id']]
+    );
+
+    $out = [
         'student_id' => $mine['student_id'],
         'name' => $mine['name'],
         'class' => $mine['class'],
@@ -76,13 +84,22 @@ $router->get('/api/student/results', function () {
         'exam_name' => $exam['exam_name'],
         'year' => $exam['year'],
         'status' => $passed ? 'Passed' : 'Failed',
-        'final_gpa' => (float)$mine['overall_gpa'],
-        'grade' => $mine['overall_grade'],
-        'gpa_without_optional' => (float)$mine['gpa_without_optional'],
-        'optional_gp_above_2' => (float)$mine['optional_gp_above_2'],
-        'total_marks' => transcriptTotalMarks($mine),
-        'position' => $merit[(string)$mine['student_id']]['position'] ?? null,
-        'fail_subjects' => $failSubjects,
-        'subjects' => $mine['subjects'],
-    ]);
+        'final_gpa' => $passed ? (float)$mine['overall_gpa'] : null,
+        'grade' => $passed ? $mine['overall_grade'] : 'F',
+        'fail_subjects' => $passed ? [] : $failSubjects,
+        'transcript_available' => $unlocked,
+    ];
+
+    if ($unlocked) {
+        $t = $mine;
+        $t['position'] = $merit[(string)$mine['student_id']]['position'] ?? null;
+        $t['total_marks'] = $merit[(string)$mine['student_id']]['total_marks'] ?? transcriptTotalMarks($mine);
+        $t['position_out_of'] = count($merit);
+        $t['exam_id'] = (int)$exam['id'];
+        $t['verify_token'] = transcriptVerifyToken((string)$mine['student_id'], (int)$exam['id']);
+        $t['verify_enabled'] = true;
+        $out['transcript'] = $t;
+    }
+
+    Response::success($out);
 });

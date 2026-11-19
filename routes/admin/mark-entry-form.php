@@ -7,6 +7,7 @@ if (!function_exists('markEntryNormSubject')) {
     function markEntryNormSubject($name) {
         $n = trim(strtolower((string)$name));
         $n = preg_replace('/\s+/', ' ', $n);
+        if (function_exists('subjectIsIct') && subjectIsIct($n)) return 'ict'; // every ICT spelling (Session 124)
         if ($n === 'information and communication technology' || $n === 'information & communication technology') {
             return 'ict';
         }
@@ -35,10 +36,16 @@ if (!function_exists('markEntryGetConfiguredItems')) {
         );
 
         $items = [];
+        // Session 124: a subject with only ONE paper is labelled by its MAIN name + subject code (else paper code)
+        $mainName = fn($n) => function_exists('subjectCanonicalName') ? subjectCanonicalName((string)$n) : (string)$n;
         foreach ($rows as $row) {
             if ($row['paper_selection'] === 'single' && !empty($row['selected_paper_id'])) {
                 $code = $row['paper_code'] ?: $row['subject_code'];
                 $label = ($code ? $code . ' ' : '') . $row['paper_name'];
+                if ((int)(Database::fetch("SELECT COUNT(*) AS n FROM subject_papers WHERE parent_id = ?", [$row['subject_id']])['n'] ?? 0) <= 1) {
+                    $code = $row['subject_code'] ?: $row['paper_code'];
+                    $label = ($code ? $code . ' ' : '') . $mainName($row['subject_name']);
+                }
                 $items[] = [
                     'key' => 'paper-' . $row['selected_paper_id'],
                     'subject_id' => (int)$row['subject_id'],
@@ -60,6 +67,10 @@ if (!function_exists('markEntryGetConfiguredItems')) {
                     foreach ($allPapers as $p) {
                         $code = $p['code'] ?: $row['subject_code'];
                         $label = ($code ? $code . ' ' : '') . $p['name'];
+                        if (count($allPapers) <= 1) {
+                            $code = $row['subject_code'] ?: $p['code'];
+                            $label = ($code ? $code . ' ' : '') . $mainName($row['subject_name']);
+                        }
                         $items[] = [
                             'key' => 'paper-' . $p['id'],
                             'subject_id' => (int)$row['subject_id'],
@@ -186,7 +197,7 @@ $router->post('/api/admin/mark-entry-form', function () {
     $dueFilter = (string)($data['due_filter'] ?? 'all');
     [$allStudents, , $excludedDue] = duesFilterRows($allStudents, (int)$year, (string)$examName, $dueFilter);
 
-    $compulsoryList = ['Bangla', 'English', 'ICT', 'Information and Communication Technology'];
+    $compulsoryList = ['Bangla', 'English', 'Information and Communications Technology', 'ICT', 'Information and Communication Technology'];
 
     $resultSheets = [];
 
@@ -277,7 +288,7 @@ $router->post('/api/admin/mark-entry-form', function () {
             $parts = Database::fetchAll(
                 "SELECT part_name, full_mark, pass_mark 
                  FROM subject_parts 
-                 WHERE subject IN ('ICT', 'Information and Communication Technology')
+                 WHERE subject IN ('ICT', 'Information and Communication Technology', 'Information and Communications Technology')
                  ORDER BY sort_order ASC, id ASC"
             );
         }

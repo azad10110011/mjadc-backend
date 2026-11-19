@@ -84,7 +84,7 @@ $router->get('/api/teacher/attendance/students', function () {
         );
     }
 
-    $compulsorySubjects = ['Bangla', 'English', 'ICT', 'Information and Communication Technology'];
+    $compulsorySubjects = ['Bangla', 'English', 'Information and Communications Technology', 'ICT', 'Information and Communication Technology'];
 
     if ($subjInfo && !in_array($subjInfo['name'], $compulsorySubjects)) {
         $subjName = $subjInfo['name'];

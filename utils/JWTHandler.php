@@ -29,7 +29,8 @@ class JWTHandler
     {
         $issuedAt = time();
         $payload['iat'] = $issuedAt;
-        $payload['exp'] = $issuedAt + self::getExpiry();
+        $expiry = ($payload['client'] ?? '') === 'app' ? self::APP_EXPIRY : self::getExpiry();
+        $payload['exp'] = $issuedAt + $expiry;
 
         return JWT::encode($payload, self::getSecret(), 'HS256');
     }
@@ -39,12 +40,27 @@ class JWTHandler
         return JWT::decode($token, new Key(self::getSecret(), 'HS256'));
     }
 
-    public static function generateToken(int $userId, string $email, array $roles): string
+    /** Session 116: the mobile apps stay signed in — 1-year tokens, renewed by /auth/refresh. */
+    public const APP_EXPIRY = 365 * 86400;
+
+    /**
+     * Fingerprint of the user's current password hash. Stored in the token so that changing (or an
+     * admin resetting) the password ends every other session — needed now that app tokens live a year.
+     */
+    public static function passwordStamp(string $passwordHash): string
     {
-        return self::encode([
+        return substr(hash('sha256', $passwordHash), 0, 12);
+    }
+
+    public static function generateToken(int $userId, string $email, array $roles, string $client = 'web', string $passwordHash = ''): string
+    {
+        $payload = [
             'user_id' => $userId,
             'email' => $email,
             'roles' => $roles,
-        ]);
+            'client' => $client === 'app' ? 'app' : 'web',
+        ];
+        if ($passwordHash !== '') $payload['pws'] = self::passwordStamp($passwordHash);
+        return self::encode($payload);
     }
 }

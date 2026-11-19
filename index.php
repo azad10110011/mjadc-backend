@@ -11,7 +11,7 @@ if ($basePath !== '/' && strpos($requestUri, $basePath) === 0) {
 $relativePath = '/' . trim($relativePath, '/');
 $relativePath = ltrim($relativePath, '/');
 
-if (strpos($relativePath, 'uploads/') === 0) {
+if (strpos($relativePath, 'uploads/') === 0 && strpos($relativePath, 'uploads/private/') !== 0) { // private files only via the API (Session 123)
     $filePath = __DIR__ . '/' . $relativePath;
     if (file_exists($filePath) && !is_dir($filePath)) {
         $ext = strtolower(pathinfo($filePath, PATHINFO_EXTENSION));
@@ -44,14 +44,44 @@ $dotenv->safeLoad();
 
 // Load core
 require_once __DIR__ . '/config/database.php';
+require_once __DIR__ . '/utils/Audit.php'; // Update History triggers + request context (Session 121) — before any DB use
 require_once __DIR__ . '/utils/Response.php';
 require_once __DIR__ . '/utils/Router.php';
 require_once __DIR__ . '/utils/Validator.php';
 require_once __DIR__ . '/utils/JWTHandler.php';
 require_once __DIR__ . '/utils/Dues.php'; // fee due status, mark-entry / result-hold rules (Session 100)
 require_once __DIR__ . '/utils/Security.php'; // login throttling, forced password change, temp passwords (Session 112)
+require_once __DIR__ . '/utils/ResultWorkflow.php'; // result draft→submitted→approved→published rules (Session 113)
+require_once __DIR__ . '/utils/PrivateFiles.php'; // private image storage served only through the API (Session 123)
+require_once __DIR__ . '/utils/SubjectNames.php'; // official subject names: ICT = Information and Communications Technology (Session 124)
 require_once __DIR__ . '/middleware/Cors.php';
 require_once __DIR__ . '/middleware/Auth.php';
+
+// Session 125: any unexpected server error → a short error id (full reason in error_log). Admins also get
+// the reason in the message, so a failure on live can be diagnosed without server access.
+function mjadcServerError(string $what): void
+{
+    $id = substr(bin2hex(random_bytes(4)), 0, 8);
+    error_log("[mjadc $id] " . ($_SERVER['REQUEST_METHOD'] ?? '') . ' ' . ($_SERVER['REQUEST_URI'] ?? '') . ' :: ' . $what);
+    $msg = "Something went wrong on the server (error $id).";
+    try {
+        $u = class_exists('Auth') ? Auth::getUser() : null;
+        if ($u && in_array('admin', (array)($u['roles'] ?? []), true)) $msg .= ' Details: ' . mb_substr($what, 0, 400);
+    } catch (Throwable $x) {}
+    while (ob_get_level()) ob_end_clean();
+    if (!headers_sent()) { http_response_code(500); header('Content-Type: application/json; charset=utf-8'); }
+    echo json_encode(['status' => 500, 'message' => $msg, 'error_id' => $id], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+set_exception_handler(function (Throwable $e) {
+    mjadcServerError(get_class($e) . ': ' . $e->getMessage() . ' @ ' . basename($e->getFile()) . ':' . $e->getLine());
+});
+register_shutdown_function(function () {
+    $e = error_get_last();
+    if ($e && in_array($e['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR], true)) {
+        mjadcServerError('PHP fatal: ' . $e['message'] . ' @ ' . basename($e['file']) . ':' . $e['line']);
+    }
+});
 
 // Handle CORS
 Cors::handle();
@@ -170,7 +200,15 @@ require __DIR__ . '/routes/admin/board-duty.php'; // Board exam hall duty + lett
 require __DIR__ . '/routes/admin/student-photos.php'; // POST /api/admin/students/{id}/photo — bulk photo upload (Session 86)
 require __DIR__ . '/routes/admin/catalog.php'; // exam names + student groups catalog (Session 88)
 require __DIR__ . '/routes/admin/quick-access.php'; // dashboard Quick Access defaults + per-user lists (Session 110)
+require __DIR__ . '/routes/admin/audit.php'; // Update History — admin only (Session 121)
+require __DIR__ . '/routes/profile-card.php'; // dashboard profile card + admin field settings (Session 122)
+require __DIR__ . '/routes/student-docs.php'; // student images: receipts, admission forms … (Session 123)
+require __DIR__ . '/routes/result-images.php'; // teachers' result sheet pictures (Session 123)
 require __DIR__ . '/routes/public/exam-fee-verify.php';
+
+// Session 124: one-time rename of old ICT spellings in stored data (skipped once its flag file exists)
+try { subjectNamesMigrate(); } catch (Throwable $e) { error_log('ICT rename failed: ' . $e->getMessage()); }
+try { resultKeysWidenMigrate(); } catch (Throwable $e) { error_log('Result key repair failed: ' . $e->getMessage()); }
 
 // Dispatch
 $router->dispatch();

@@ -389,7 +389,7 @@ $router->post('/api/admin/exam-fees/paid-by-subject', function () use ($examFeeT
 
     $norm = function (string $s): string {
         $s = trim($s);
-        return strcasecmp($s, 'ICT') === 0 ? 'Information and Communication Technology' : $s;
+        return subjectCanonicalName($s); // ICT → official name (Session 124)
     };
     $list = function ($v): array {
         $a = json_decode((string)$v, true);

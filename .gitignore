@@ -10,3 +10,5 @@
 !/uploads/profiles/.gitkeep
 !/uploads/.htaccess
 !/uploads/documents/.gitkeep
+!/uploads/private/
+!/uploads/private/.htaccess

@@ -104,12 +104,21 @@ function transcriptBuild(array $exam, string $studentIdFilter = '', string $grou
         }
     }
     // "Bangla - Bangla-2" -> ['name' => 'Bangla-2', 'code' => '102']
-    $resolveDisplay = function (string $raw) use ($paperCode, $subjectCode): array {
+    $resolveDisplay = function (string $raw) use ($paperCode, $subjectCode, $paperToSubject, $paperToSubjectName, $subjectPapersMap): array {
+        $raw = function_exists('subjectCanonicalName') ? subjectCanonicalName($raw) : $raw; // official spellings (Session 124)
         $name = $raw;
         if (!isset($paperCode[$raw]) && strpos($raw, ' - ') !== false) {
             $name = trim(explode(' - ', $raw, 2)[1]);
         }
         $code = ($paperCode[$name] ?? '') ?: ($subjectCode[$name] ?? '') ?: ($subjectCode[$raw] ?? '');
+        // Session 124: a subject with only ONE paper is shown by its MAIN subject name, with the subject's
+        // code — or, if the subject has no code, that paper's code (e.g. ICT → "Information and
+        // Communications Technology", 275). Subjects with several papers keep their paper names.
+        if (isset($paperToSubject[$name]) && count($subjectPapersMap[$paperToSubject[$name]] ?? []) <= 1) {
+            $main = $paperToSubjectName[$name];
+            $code = ($subjectCode[$main] ?? '') ?: ($paperCode[$name] ?? '') ?: $code;
+            $name = $main;
+        }
         return ['name' => $name, 'code' => (string)$code];
     };
 
@@ -399,7 +408,15 @@ function transcriptBuild(array $exam, string $studentIdFilter = '', string $grou
             'custom' => (object)$custom,
             'student_type' => $student['student_type'] ?? '',
             'optional_subject' => $student['optional_subject'] ?? '',
-            'published_at' => null,
+            // Session 115: the date the result was published (latest row), only once every row is published
+            'published_at' => (function () use ($studentResults) {
+                $latest = null;
+                foreach ($studentResults as $r) {
+                    if (($r['status'] ?? '') !== 'published') return null;
+                    if (!empty($r['published_at']) && ($latest === null || $r['published_at'] > $latest)) $latest = $r['published_at'];
+                }
+                return $latest;
+            })(),
             'subjects' => $subjects,
             'overall_gpa' => $overallGpa,
             'overall_grade' => $overallGrade,

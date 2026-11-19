@@ -115,7 +115,7 @@ $router->get('/api/admin/results/upload-data', function () {
         if (teacherResultSameSubject($candidate, 'ICT')) {
             $rows = Database::fetchAll(
                 "SELECT part_name, full_mark, pass_mark, sort_order FROM subject_parts
-                 WHERE subject IN ('ICT', 'Information and Communication Technology')
+                 WHERE subject IN ('ICT', 'Information and Communication Technology', 'Information and Communications Technology')
                  ORDER BY sort_order ASC, id ASC"
             );
         } else {
@@ -354,6 +354,87 @@ $router->post('/api/admin/results/upload', function () {
     }
 
     Response::created(['processed' => $processed, 'subject_key' => $subjectKey], "{$processed} results saved");
+});
+
+// PUT /api/admin/results/{id}  { parts_data?, absent_in?, mcq?, cq?, practical?, status? }  (Session 113)
+// Admin override: edit one result's marks at ANY stage (incl. published), and optionally move its status.
+$router->put('/api/admin/results/{id}', function (array $params) {
+    $user = Auth::requireRole('admin');
+    $data = json_decode(file_get_contents('php://input'), true) ?: [];
+    $row = Database::fetch("SELECT * FROM exam_results WHERE id = ?", [$params['id']]);
+    if (!$row) Response::notFound('Result not found');
+
+    $partsData = is_array($data['parts_data'] ?? null) ? $data['parts_data'] : [];
+    $absentIn = is_array($data['absent_in'] ?? null) ? $data['absent_in']
+        : (is_array(json_decode((string)$row['absent_in'], true)) ? json_decode((string)$row['absent_in'], true) : []);
+    if (empty($partsData)) {
+        $partsData = is_array(json_decode((string)$row['parts_data'], true)) ? json_decode((string)$row['parts_data'], true) : [];
+        foreach (['mcq', 'cq', 'practical'] as $k) if (isset($data[$k])) $partsData[$k] = $data[$k];
+        if (empty($partsData)) $partsData = ['mcq' => $row['mcq'], 'cq' => $row['cq'], 'practical' => $row['practical']];
+    }
+    [$cq, $mcq, $practical, $total, $grade, $gpa, $partsJson, $absentJson] = resultComputeRow((string)$row['subject'], $partsData, $absentIn);
+
+    $set = ['cq' => $cq, 'mcq' => $mcq, 'practical' => $practical, 'total' => $total, 'grade' => $grade, 'gpa' => $gpa, 'parts_data' => $partsJson, 'absent_in' => $absentJson];
+    if (isset($data['status'])) {
+        $stamp = resultStatusFullStamp((string)$data['status'], (int)$user['id']);
+        if ($stamp === null) Response::validationError(['status must be one of: ' . implode(', ', resultStages())]);
+        $set = array_merge($set, $stamp);
+    }
+    Database::update('exam_results', $set, 'id = ?', ['id' => $params['id']]);
+    Response::success(['grade' => $grade, 'gpa' => $gpa, 'total' => $total], 'Result updated');
+});
+
+// POST /api/admin/results/status  (Session 113)
+// Admin override: move results to any stage — back to teacher (draft), Exam Controller (submitted),
+// Principal (approved) or publish (published). Target by result_ids[], or by exam filter.
+//   { status, result_ids?[] }  OR  { status, year, class, exam_name, subject?, group? }
+$router->post('/api/admin/results/status', function () {
+    $user = Auth::requireRole('admin');
+    $data = json_decode(file_get_contents('php://input'), true) ?: [];
+    $to = trim((string)($data['status'] ?? ''));
+    $stamp = resultStatusFullStamp($to, (int)$user['id']);
+    if ($stamp === null) Response::validationError(['status must be one of: ' . implode(', ', resultStages())]);
+
+    $sets = [];
+    $vals = [];
+    // qualify with the `er` alias — a joined students row also has a `status` column
+    foreach ($stamp as $col => $v) { $sets[] = "er.`{$col}` = ?"; $vals[] = $v; }
+    $setSql = implode(', ', $sets);
+
+    $ids = $data['result_ids'] ?? null;
+    if (is_array($ids) && $ids) {
+        $ids = array_values(array_filter(array_map('intval', $ids)));
+        if (!$ids) Response::validationError(['result_ids must be valid ids']);
+        $ph = implode(', ', array_fill(0, count($ids), '?'));
+        $stmt = Database::query("UPDATE exam_results er SET {$setSql} WHERE er.id IN ({$ph})", array_merge($vals, $ids));
+        Response::success(['updated' => $stmt->rowCount()], $stmt->rowCount() . " result(s) moved to {$to}");
+    }
+
+    $year = (int)($data['year'] ?? 0);
+    $class = trim((string)($data['class'] ?? ''));
+    $examName = trim((string)($data['exam_name'] ?? ''));
+    $subject = trim((string)($data['subject'] ?? ''));
+    $group = trim((string)($data['group'] ?? ''));
+    if (!$year || !$class || !$examName) {
+        Response::validationError(['Provide result_ids, or year + class + exam_name']);
+    }
+    $exam = Database::fetch(
+        "SELECT id FROM exams WHERE exam_name = ? AND class = ? AND year = ? ORDER BY id DESC LIMIT 1",
+        [$examName, $class, $year]
+    );
+    if (!$exam) Response::notFound('Exam not found');
+
+    $where = 'er.exam_id = ?';
+    $wv = [$exam['id']];
+    if ($subject !== '') { $where .= ' AND (er.subject = ? OR er.subject LIKE ?)'; $wv[] = $subject; $wv[] = $subject . ' - %'; }
+    $joinGroup = '';
+    if ($group !== '') { $joinGroup = ' JOIN students s ON s.id = er.student_id'; $where .= ' AND s.student_group = ?'; $wv[] = $group; }
+
+    $stmt = Database::query(
+        "UPDATE exam_results er{$joinGroup} SET {$setSql} WHERE {$where}",
+        array_merge($vals, $wv)
+    );
+    Response::success(['updated' => $stmt->rowCount()], $stmt->rowCount() . " result(s) moved to {$to}");
 });
 
 // DELETE /api/admin/results/bulk?exam_name=&class=&year=&subject=

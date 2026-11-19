@@ -32,6 +32,10 @@ class Database
                 PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
                 PDO::ATTR_EMULATE_PREPARES => false,
             ]);
+            // Session 121: tell the Update History triggers about this request (IP, device, URL …).
+            if (function_exists('auditRequestContext')) {
+                try { auditRequestContext(self::$instance); } catch (\Throwable $e) { /* never block the request */ }
+            }
         }
 
         return self::$instance;

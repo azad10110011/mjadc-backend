@@ -214,6 +214,8 @@ $router->get('/api/public/transcript-verify', function () {
         }
     }
 
+    // The QR link is permanent; it always shows the CURRENT result, so a mark corrected after
+    // publishing is reflected on the next scan (rebuilt live from exam_results each time).
     $list = transcriptBuild($exam, $code, '', true);
     if (empty($list)) Response::error('Transcript not found. ' . TRANSCRIPT_VERIFY_OFF_MSG, 404);
 

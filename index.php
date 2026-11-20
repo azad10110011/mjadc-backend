@@ -184,6 +184,8 @@ require __DIR__ . '/routes/admin/mark-entry-form.php'; // POST /api/admin/mark-e
 require __DIR__ . '/routes/admin/transcript-verify.php'; // transcript QR verify (admin + public); needs transcript.php above
 require __DIR__ . '/routes/admin/result-summary.php'; // POST /api/admin/result-summary; needs transcript.php above
 require __DIR__ . '/routes/admin/id-cards.php'; // GET /api/admin/id-cards (restored, Session 77)
+require __DIR__ . '/routes/admin/card-templates.php'; // ID card designer templates + QR verify helpers (2026-11-20)
+require __DIR__ . '/routes/public/id-verify.php'; // public ID card QR scan (needs card-templates.php above)
 require __DIR__ . '/routes/student/results.php'; // GET /api/student/results (restored, Session 77); needs transcript.php
 require __DIR__ . '/routes/teacher/attendance.php'; // teacher + admin attendance, /api/teacher/subjects (restored, Session 77)
 require __DIR__ . '/routes/admin/changelog.php'; // GET /api/admin/changelog (restored, Session 77)

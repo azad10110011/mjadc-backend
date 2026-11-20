@@ -16,15 +16,26 @@ $router->get('/api/admin/id-cards', function () {
     }
 
     $sql = match ($type) {
-        'students' => "SELECT id, student_id, name, father_name, mother_name, class, section, student_group, photo_path, academic_session, gender, mobile, parent_mobile, address, present_address, permanent_address, date_of_birth, blood_group FROM students",
+        'students' => "SELECT id, student_id, name, father_name, mother_name, class, section, student_group, class_roll, photo_path, academic_session, gender, mobile, parent_mobile, address, present_address, permanent_address, date_of_birth, blood_group FROM students",
         'teachers' => "SELECT id, name, name_bangla, designation, subject, `group` as teacher_group, joining_date, photo_path, mobile, email, gender, blood_group, emergency_contact FROM teachers",
         'staff' => "SELECT id, name, name_bangla, designation, joining_date, photo_path, mobile, email, gender, blood_group, emergency_contact FROM staff",
     };
 
+    // Attach a per-person verify token (HMAC) and effective expiry date (helpers from card-templates.php).
+    $expiryMap = function_exists('cardExpiryMap') ? cardExpiryMap($type) : ['default' => null, 'overrides' => []];
+    $withToken = function ($row) use ($type, $expiryMap) {
+        if ($row && function_exists('cardVerifyToken')) {
+            $row['verify_token'] = cardVerifyToken($type, (int)$row['id']);
+            $pid = (int)$row['id'];
+            $row['expire_date'] = array_key_exists($pid, $expiryMap['overrides']) ? $expiryMap['overrides'][$pid] : $expiryMap['default'];
+        }
+        return $row;
+    };
+
     if ($id) {
         $row = Database::fetch("$sql WHERE id = ?", [$id]);
-        Response::success($row ?: null);
+        Response::success($row ? $withToken($row) : null);
     } else {
-        Response::success(Database::fetchAll("$sql ORDER BY name"));
+        Response::success(array_map($withToken, Database::fetchAll("$sql ORDER BY name")));
     }
 });
